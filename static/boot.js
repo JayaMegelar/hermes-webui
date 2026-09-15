@@ -2227,6 +2227,8 @@ function clearPreview(opts={}){
   const html=$('previewHtmlIframe');if(html)html.src='';
   const pm=$('previewMd');if(pm)pm.innerHTML='';
   const pc=$('previewCode');if(pc)pc.textContent='';
+  const bpmnCanvas=$('previewBpmnCanvas');if(bpmnCanvas)bpmnCanvas.innerHTML='';
+  if(typeof _destroyBpmnViewer==='function') _destroyBpmnViewer();
   const pp=$('previewPathText');if(pp)pp.textContent='';
   const ft=$('fileTree');if(ft)ft.style.display='';
   _previewCurrentPath='';_previewCurrentMode='';_previewDirty=false;

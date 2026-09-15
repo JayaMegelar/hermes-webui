@@ -844,6 +844,7 @@ const HTML_EXTS   = new Set(['.html','.htm']);
 const PDF_EXTS    = new Set(['.pdf']);
 const AUDIO_EXTS  = new Set(['.mp3','.wav','.m4a','.aac','.ogg','.oga','.opus','.flac']);
 const VIDEO_EXTS  = new Set(['.mp4','.mov','.m4v','.webm','.ogv','.avi','.mkv']);
+const BPMN_EXTS   = new Set(['.bpmn']);
 const MD_PREVIEW_RICH_RENDER_MAX_BYTES = 256 * 1024;
 const MD_PREVIEW_RICH_RENDER_MAX_LINES = 5000;
 // Binary formats that should download rather than preview
@@ -958,17 +959,18 @@ let _previewOfficeFormat = '';  // current claimed Office format, if any
 let _previewPreviewKind = '';  // preview family returned by the backend
 
 function showPreview(mode){
-  // mode: 'code' | 'csv' | 'image' | 'md' | 'html' | 'pdf' | 'audio' | 'video'
+  // mode: 'code' | 'csv' | 'image' | 'md' | 'html' | 'pdf' | 'audio' | 'video' | 'bpmn'
   $('previewCode').style.display     = mode==='code'  ? '' : 'none';
   $('previewImgWrap').style.display  = mode==='image' ? '' : 'none';
   const mediaWrap=$('previewMediaWrap'); if(mediaWrap) mediaWrap.style.display = (mode==='audio'||mode==='video') ? '' : 'none';
   const pdfWrap=$('previewPdfWrap'); if(pdfWrap) pdfWrap.style.display = mode==='pdf' ? '' : 'none';
   $('previewMd').style.display       = (mode==='md'||mode==='csv') ? '' : 'none';
   $('previewHtmlWrap').style.display = mode==='html'  ? '' : 'none';
+  const bpmnWrap=$('previewBpmnWrap'); if(bpmnWrap) bpmnWrap.style.display = mode==='bpmn' ? 'flex' : 'none';
   $('previewEditArea').style.display = 'none';  // start in read-only
   const badge=$('previewBadge');
   badge.className='preview-badge '+mode;
-  badge.textContent = mode==='image'?'image':mode==='audio'?'audio':mode==='video'?'video':mode==='pdf'?'pdf':mode==='csv'?'csv':mode==='md'?'md':mode==='html'?'html':fileExt($('previewPathText').textContent)||'text';
+  badge.textContent = mode==='image'?'image':mode==='audio'?'audio':mode==='video'?'video':mode==='pdf'?'pdf':mode==='csv'?'csv':mode==='md'?'md':mode==='html'?'html':mode==='bpmn'?'bpmn':fileExt($('previewPathText').textContent)||'text';
   _previewCurrentMode = mode;
   _previewDirty = false;
   updateEditBtn();
@@ -983,7 +985,7 @@ function updateEditBtn(){
   if(!btn)return;
   const editable = !_workspacePathIsReadOnly(_previewCurrentPath)
     && (_previewServerEditable===null
-      ? (_previewCurrentMode==='code'||_previewCurrentMode==='md'||_previewCurrentMode==='csv')
+      ? (_previewCurrentMode==='code'||_previewCurrentMode==='md'||_previewCurrentMode==='csv'||_previewCurrentMode==='bpmn')
       : !!_previewServerEditable);
   btn.style.display = editable?'':'none';
   const editing = $('previewEditArea').style.display!=='none';
@@ -1026,9 +1028,11 @@ async function toggleEditMode(){
       _previewRawContentPath = _previewCurrentPath;
       if(_previewCurrentMode==='code') $('previewCode').textContent=savedContent;
       else if(_previewCurrentMode==='csv') renderCsvPreviewContent(_previewCurrentPath, savedContent);
+      else if(_previewCurrentMode==='bpmn') renderBpmnPreviewContent(_previewCurrentPath, savedContent);
       else renderMarkdownPreviewContent({content:savedContent});
       $('previewEditArea').style.display='none';
       if(_previewCurrentMode==='code') $('previewCode').style.display='';
+      else if(_previewCurrentMode==='bpmn') $('previewBpmnWrap').style.display='flex';
       else $('previewMd').style.display='';
       showToast(t('saved'));
     }catch(e){setStatus(t('save_failed')+e.message);}
@@ -1040,6 +1044,7 @@ async function toggleEditMode(){
     $('previewEditArea').value=currentText;
     $('previewEditArea').style.display='';
     if(_previewCurrentMode==='code') $('previewCode').style.display='none';
+    else if(_previewCurrentMode==='bpmn') $('previewBpmnWrap').style.display='none';
     else $('previewMd').style.display='none';
     // Escape cancels the edit without saving
     $('previewEditArea').onkeydown=e=>{
@@ -1057,6 +1062,7 @@ function cancelEditMode(){
   $('previewEditArea').style.display='none';
   $('previewEditArea').onkeydown=null;
   if(_previewCurrentMode==='code') $('previewCode').style.display='';
+  else if(_previewCurrentMode==='bpmn') $('previewBpmnWrap').style.display='flex';
   else $('previewMd').style.display='';
   _previewDirty=false;
   updateEditBtn();
@@ -1095,6 +1101,107 @@ function _prismLanguageForPath(path){
   const ext=fileExt(path).replace(/^\./,'');
   return _PRISM_LANG_MAP[ext]!==undefined?_PRISM_LANG_MAP[ext]:'plaintext';
 }
+
+let _bpmnViewerInstance = null;
+let _bpmnLoadingPromise = null;
+let _bpmnShowingXml = false;
+
+function _destroyBpmnViewer(){
+  if(_bpmnViewerInstance){
+    try { _bpmnViewerInstance.destroy(); } catch(e){}
+    _bpmnViewerInstance = null;
+  }
+}
+
+function loadBpmnViewerLibrary(){
+  if(window.BpmnJS) return Promise.resolve();
+  if(_bpmnLoadingPromise) return _bpmnLoadingPromise;
+
+  _bpmnLoadingPromise = new Promise((resolve, reject) => {
+    const linkDiagram = document.createElement('link');
+    linkDiagram.rel = 'stylesheet';
+    linkDiagram.href = 'https://cdn.jsdelivr.net/npm/bpmn-js@17/dist/assets/diagram-js.css';
+    document.head.appendChild(linkDiagram);
+
+    const linkBpmn = document.createElement('link');
+    linkBpmn.rel = 'stylesheet';
+    linkBpmn.href = 'https://cdn.jsdelivr.net/npm/bpmn-js@17/dist/assets/bpmn-js.css';
+    document.head.appendChild(linkBpmn);
+
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/bpmn-js@17/dist/bpmn-navigated-viewer.production.min.js';
+    script.crossOrigin = 'anonymous';
+    script.onload = () => resolve();
+    script.onerror = (err) => {
+      _bpmnLoadingPromise = null;
+      reject(err);
+    };
+    document.head.appendChild(script);
+  });
+  return _bpmnLoadingPromise;
+}
+
+async function renderBpmnPreviewContent(path, xml){
+  showPreview('bpmn');
+  _bpmnShowingXml = false;
+  const toggleBtn = $('btnBpmnToggleView');
+  if(toggleBtn) toggleBtn.innerHTML = '&lt;/&gt; Raw XML';
+
+  try {
+    await loadBpmnViewerLibrary();
+    const canvasEl = $('previewBpmnCanvas');
+    if(!canvasEl) return;
+    canvasEl.innerHTML = '';
+    _destroyBpmnViewer();
+
+    _bpmnViewerInstance = new window.BpmnJS({
+      container: canvasEl
+    });
+    await _bpmnViewerInstance.importXML(xml);
+    const canvas = _bpmnViewerInstance.get('canvas');
+    canvas.zoom('fit-viewport');
+  } catch(err) {
+    console.error('BPMN render error:', err);
+    showPreview('code');
+    $('previewCode').textContent = xml;
+    if(typeof showToast==='function'){
+      showToast('Visual BPMN preview failed. Displaying raw XML.', 3000, 'warning');
+    }
+  }
+}
+
+function bpmnFitViewport(){
+  if(_bpmnViewerInstance){
+    try {
+      const canvas = _bpmnViewerInstance.get('canvas');
+      canvas.zoom('fit-viewport');
+    } catch(e){}
+  }
+}
+
+function bpmnToggleRawXml(){
+  if(_bpmnShowingXml){
+    _bpmnShowingXml = false;
+    showPreview('bpmn');
+    const toggleBtn = $('btnBpmnToggleView');
+    if(toggleBtn) toggleBtn.innerHTML = '&lt;/&gt; Raw XML';
+    if(_previewRawContent){
+      renderBpmnPreviewContent(_previewCurrentPath, _previewRawContent);
+    }
+  } else {
+    _bpmnShowingXml = true;
+    showPreview('code');
+    const toggleBtn = $('btnBpmnToggleView');
+    if(toggleBtn) toggleBtn.innerHTML = '📊 Diagram';
+    if(_previewRawContent){
+      $('previewCode').textContent = _previewRawContent;
+    }
+  }
+}
+
+window.bpmnFitViewport = bpmnFitViewport;
+window.bpmnToggleRawXml = bpmnToggleRawXml;
+window._destroyBpmnViewer = _destroyBpmnViewer;
 
 async function openFile(path, opts={}){
   if(!S.session)return;
@@ -1184,6 +1291,19 @@ async function openFile(path, opts={}){
     if(iframe){
       iframe.src=''; // clear first to avoid stale content
       iframe.src=url;
+    }
+  } else if(BPMN_EXTS.has(ext)){
+    try{
+      const data=await api(_workspaceRouteForPath(path, 'read'));
+      if(data.binary){
+        downloadFile(path);
+        return;
+      }
+      _previewRawContent = data.content;
+      _previewRawContentPath = path;
+      await renderBpmnPreviewContent(path, data.content);
+    }catch(e){
+      downloadFile(path);
     }
   } else if(ext==='.csv'){
     try{

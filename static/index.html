@@ -1725,6 +1725,13 @@
       <div class="preview-html-wrap" id="previewHtmlWrap" style="display:none;flex:1;border-radius:8px;overflow:hidden;border:1px solid var(--border2)">
         <iframe id="previewHtmlIframe" style="width:100%;height:100%;border:none;background:#fff" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" title="HTML preview"></iframe>
       </div>
+      <div class="preview-bpmn-wrap" id="previewBpmnWrap" style="display:none;flex:1;flex-direction:column;position:relative;width:100%;height:100%;min-height:500px;border-radius:8px;overflow:hidden;border:1px solid var(--border2);background:#ffffff;">
+        <div id="previewBpmnCanvas" style="width:100%;height:100%;min-height:480px;flex:1;"></div>
+        <div class="preview-bpmn-controls" style="position:absolute;bottom:12px;right:12px;display:flex;gap:6px;z-index:10;">
+          <button id="btnBpmnFit" class="panel-icon-btn" style="background:rgba(255,255,255,0.92);border:1px solid #ccc;color:#222;padding:4px 10px;font-size:12px;border-radius:5px;box-shadow:0 2px 6px rgba(0,0,0,0.15);cursor:pointer;" onclick="bpmnFitViewport()" title="Fit Diagram to Viewport">⛶ Fit View</button>
+          <button id="btnBpmnToggleView" class="panel-icon-btn" style="background:rgba(255,255,255,0.92);border:1px solid #ccc;color:#222;padding:4px 10px;font-size:12px;border-radius:5px;box-shadow:0 2px 6px rgba(0,0,0,0.15);cursor:pointer;" onclick="bpmnToggleRawXml()" title="Toggle XML / Diagram View">&lt;/&gt; Raw XML</button>
+        </div>
+      </div>
       <textarea id="previewEditArea" style="display:none;flex:1;width:100%;background:var(--code-bg);color:var(--pre-text);border:1px solid var(--border2);border-radius:8px;padding:12px;font-family:var(--font-mono);font-size:12px;line-height:1.6;resize:none;outline:none" oninput="_previewDirty=true;updateEditBtn()"></textarea>
     </div>
   </aside>
