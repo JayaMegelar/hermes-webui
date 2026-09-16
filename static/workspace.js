@@ -959,7 +959,7 @@ let _previewOfficeFormat = '';  // current claimed Office format, if any
 let _previewPreviewKind = '';  // preview family returned by the backend
 
 function showPreview(mode){
-  // mode: 'code' | 'csv' | 'image' | 'md' | 'html' | 'pdf' | 'audio' | 'video' | 'bpmn'
+  // mode: 'code' | 'csv' | 'image' | 'md' | 'html' | 'pdf' | 'audio' | 'video' | 'bpmn' | 'workbench'
   $('previewCode').style.display     = mode==='code'  ? '' : 'none';
   $('previewImgWrap').style.display  = mode==='image' ? '' : 'none';
   const mediaWrap=$('previewMediaWrap'); if(mediaWrap) mediaWrap.style.display = (mode==='audio'||mode==='video') ? '' : 'none';
@@ -967,10 +967,13 @@ function showPreview(mode){
   $('previewMd').style.display       = (mode==='md'||mode==='csv') ? '' : 'none';
   $('previewHtmlWrap').style.display = mode==='html'  ? '' : 'none';
   const bpmnWrap=$('previewBpmnWrap'); if(bpmnWrap) bpmnWrap.style.display = mode==='bpmn' ? 'flex' : 'none';
+  const wbWrap=$('workbenchSplitWrap'); if(wbWrap) wbWrap.style.display = mode==='workbench' ? 'flex' : 'none';
+  const rpanel=document.querySelector('.rightpanel');
+  if(rpanel) rpanel.classList.toggle('workbench-mode-active', mode==='workbench');
   $('previewEditArea').style.display = 'none';  // start in read-only
   const badge=$('previewBadge');
   badge.className='preview-badge '+mode;
-  badge.textContent = mode==='image'?'image':mode==='audio'?'audio':mode==='video'?'video':mode==='pdf'?'pdf':mode==='csv'?'csv':mode==='md'?'md':mode==='html'?'html':mode==='bpmn'?'bpmn':fileExt($('previewPathText').textContent)||'text';
+  badge.textContent = mode==='workbench'?'workbench':mode==='image'?'image':mode==='audio'?'audio':mode==='video'?'video':mode==='pdf'?'pdf':mode==='csv'?'csv':mode==='md'?'md':mode==='html'?'html':mode==='bpmn'?'bpmn':fileExt($('previewPathText').textContent)||'text';
   _previewCurrentMode = mode;
   _previewDirty = false;
   updateEditBtn();
@@ -1106,11 +1109,70 @@ let _bpmnViewerInstance = null;
 let _bpmnLoadingPromise = null;
 let _bpmnShowingXml = false;
 
+// Workbench State & Maps
+const WORKSPACE_GDRIVE_MAP = {
+  'PRD/PRD_EMS_00_Master_Data_Architecture.md': 'https://drive.google.com/open?id=11760ltGFHwrBSPeLmCanDBUms4dBSr5E',
+  'PRD/PRD_EMS_01_Admission_Trial.md': 'https://drive.google.com/open?id=1lNwSIoQ_tIdcYIi8h1g1KT7MokXK7eAC',
+  'PRD/PRD_EMS_02_Fees_Billing.md': 'https://drive.google.com/open?id=1v_9MU9cy3qI5F6a_fpwRFQ6x2E2Z5NxR',
+  'PRD/PRD_EMS_03_Timetable_Attendance.md': 'https://drive.google.com/open?id=1pJzDjgxvG-NGXie58dj6aLnhptCZd0mq',
+  'PRD/PRD_EMS_04_Assessment_Gradebook_Parent.md': 'https://drive.google.com/open?id=1LJe5IpClCJKtGkfpVV9bmrxaQcJXIP8B',
+  'PRD/PRD_EMS_Master_Bimbel.md': 'https://drive.google.com/open?id=1DH4DWkexjrDjj5gXPdy_QclnRhMFWOMY',
+  'PRD/PRD_Hermes_WebUI_Product_Analyst_Suite.md': 'https://drive.google.com/open?id=1ODKru-jupUWjkj01jaSYy-2uV6VYsBqT',
+  'Flows/flow_master_data_setup.bpmn': 'https://drive.google.com/open?id=1s3bA-kaG2_l2RrvW_KGun8qz0gR_QHi5',
+  'Flows/flow_admission_trial.bpmn': 'https://drive.google.com/open?id=1AJu8zNp99CRXpGRU05lqBcG7cNXmGdIP',
+  'Flows/flow_fees_invoicing.bpmn': 'https://drive.google.com/open?id=1WqeOKAFbORGrMeywBQ7COZoOS_D_-D9i',
+  'Flows/flow_attendance_session.bpmn': 'https://drive.google.com/open?id=1Bgk6oTiltCK-9r3xhdidxqlhCCnwXqFP',
+  'Flows/flow_gradebook_eval.bpmn': 'https://drive.google.com/open?id=1EHWhViRw4HigNtpCDbeWwRWrt0NUubhQ',
+  'Flows/ems_master_workflow.bpmn': 'https://drive.google.com/open?id=1Qhv4ZoPvtMCpuIoPqRikmzNJYeeNf1SN',
+  'Flows/sample_order_process.bpmn': 'https://drive.google.com/open?id=1eTxVSGkKHMzF9hTaVlKWDPTlRNfLtBE_'
+};
+
+const WORKBENCH_PAIR_MAP = {
+  'PRD/PRD_EMS_00_Master_Data_Architecture.md': 'Flows/flow_master_data_setup.bpmn',
+  'PRD/PRD_EMS_01_Admission_Trial.md': 'Flows/flow_admission_trial.bpmn',
+  'PRD/PRD_EMS_02_Fees_Billing.md': 'Flows/flow_fees_invoicing.bpmn',
+  'PRD/PRD_EMS_03_Timetable_Attendance.md': 'Flows/flow_attendance_session.bpmn',
+  'PRD/PRD_EMS_04_Assessment_Gradebook_Parent.md': 'Flows/flow_gradebook_eval.bpmn',
+  'PRD/PRD_EMS_Master_Bimbel.md': 'Flows/ems_master_workflow.bpmn',
+  'Flows/flow_master_data_setup.bpmn': 'PRD/PRD_EMS_00_Master_Data_Architecture.md',
+  'Flows/flow_admission_trial.bpmn': 'PRD/PRD_EMS_01_Admission_Trial.md',
+  'Flows/flow_fees_invoicing.bpmn': 'PRD/PRD_EMS_02_Fees_Billing.md',
+  'Flows/flow_attendance_session.bpmn': 'PRD/PRD_EMS_03_Timetable_Attendance.md',
+  'Flows/flow_gradebook_eval.bpmn': 'PRD/PRD_EMS_04_Assessment_Gradebook_Parent.md',
+  'Flows/ems_master_workflow.bpmn': 'PRD/PRD_EMS_Master_Bimbel.md'
+};
+
+const ALL_WORKBENCH_FLOWS = [
+  { path: 'Flows/flow_master_data_setup.bpmn', name: '0. Master Data Setup' },
+  { path: 'Flows/flow_admission_trial.bpmn', name: '1. Admission & Trial Class' },
+  { path: 'Flows/flow_fees_invoicing.bpmn', name: '2. Fees & Invoicing' },
+  { path: 'Flows/flow_attendance_session.bpmn', name: '3. Session & Attendance' },
+  { path: 'Flows/flow_gradebook_eval.bpmn', name: '4. Tryout & Gradebook' },
+  { path: 'Flows/ems_master_workflow.bpmn', name: 'Master End-to-End Workflow' },
+  { path: 'Flows/sample_order_process.bpmn', name: 'Sample Order Flow' }
+];
+
+let _workbenchBpmnViewerInstance = null;
+let _workbenchActivePrdPath = '';
+let _workbenchActiveBpmnPath = '';
+let _workbenchActivePrdContent = '';
+let _workbenchActiveBpmnXml = '';
+
 function _destroyBpmnViewer(){
   if(_bpmnViewerInstance){
     try { _bpmnViewerInstance.destroy(); } catch(e){}
     _bpmnViewerInstance = null;
   }
+  if(_workbenchBpmnViewerInstance){
+    try { _workbenchBpmnViewerInstance.destroy(); } catch(e){}
+    _workbenchBpmnViewerInstance = null;
+  }
+  const rpanel = document.querySelector('.rightpanel');
+  if(rpanel) rpanel.classList.remove('workbench-mode-active');
+  const btnWb = $('btnToggleWorkbench');
+  if(btnWb) btnWb.style.display = 'none';
+  const btnDrive = $('btnOpenInDrive');
+  if(btnDrive) btnDrive.style.display = 'none';
 }
 
 function loadBpmnViewerLibrary(){
@@ -1199,9 +1261,262 @@ function bpmnToggleRawXml(){
   }
 }
 
+function openPreviewInGoogleDrive(){
+  if(!_previewCurrentPath) return;
+  const directLink = WORKSPACE_GDRIVE_MAP[_previewCurrentPath];
+  if(directLink){
+    window.open(directLink, '_blank', 'noopener,noreferrer');
+  } else {
+    window.open('https://drive.google.com/drive/u/0/folders/Hermes_Artifacts', '_blank', 'noopener,noreferrer');
+  }
+}
+
+async function exportBpmnSvg(){
+  if(!_bpmnViewerInstance) return;
+  try{
+    const { svg } = await _bpmnViewerInstance.saveSVG({ format: true });
+    _downloadSvgBlob(svg, _previewCurrentPath);
+  }catch(e){
+    console.error('Export SVG failed', e);
+  }
+}
+
+async function workbenchExportSvg(){
+  if(!_workbenchBpmnViewerInstance) return;
+  try{
+    const { svg } = await _workbenchBpmnViewerInstance.saveSVG({ format: true });
+    _downloadSvgBlob(svg, _workbenchActiveBpmnPath || 'workbench_flow');
+  }catch(e){
+    console.error('Workbench export SVG failed', e);
+  }
+}
+
+function _downloadSvgBlob(svgString, baseName){
+  const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const cleanName = ((baseName||'diagram').split('/').pop()||'diagram').replace(/\.bpmn$/, '');
+  a.download = cleanName + '.svg';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  if(typeof showToast==='function') showToast('Diagram SVG exported successfully!');
+}
+
+async function toggleSplitWorkbench(){
+  const wbLabel = $('btnToggleWorkbenchLabel');
+  if(_previewCurrentMode === 'workbench'){
+    const isBpmn = fileExt(_previewCurrentPath) === '.bpmn';
+    showPreview(isBpmn ? 'bpmn' : 'md');
+    if(wbLabel) wbLabel.textContent = 'Split Workbench';
+    return;
+  }
+
+  if(wbLabel) wbLabel.textContent = 'Close Split';
+
+  let targetPrd = '';
+  let targetBpmn = '';
+
+  if(fileExt(_previewCurrentPath) === '.bpmn'){
+    targetBpmn = _previewCurrentPath;
+    targetPrd = WORKBENCH_PAIR_MAP[_previewCurrentPath] || 'PRD/PRD_EMS_Master_Bimbel.md';
+  } else {
+    targetPrd = _previewCurrentPath;
+    targetBpmn = WORKBENCH_PAIR_MAP[_previewCurrentPath] || 'Flows/flow_admission_trial.bpmn';
+  }
+
+  await launchSplitWorkbench(targetPrd, targetBpmn);
+}
+
+async function launchSplitWorkbench(prdPath, bpmnPath){
+  showPreview('workbench');
+  _workbenchActivePrdPath = prdPath;
+  _workbenchActiveBpmnPath = bpmnPath;
+
+  // 1. Populate flow selector
+  const selectEl = $('workbenchFlowSelect');
+  if(selectEl){
+    selectEl.innerHTML = '';
+    ALL_WORKBENCH_FLOWS.forEach(flow => {
+      const opt = document.createElement('option');
+      opt.value = flow.path;
+      opt.textContent = flow.name;
+      if(flow.path === bpmnPath) opt.selected = true;
+      selectEl.appendChild(opt);
+    });
+  }
+
+  // 2. Load PRD content
+  const prdBody = $('workbenchPrdBody');
+  const prdTitle = $('workbenchPrdTitle');
+  if(prdTitle) prdTitle.textContent = '📄 ' + (prdPath.split('/').pop() || 'PRD Specification');
+  if(prdBody){
+    prdBody.innerHTML = '<div style="padding:20px;color:var(--muted)">Loading specification...</div>';
+    try{
+      const data = await api(_workspaceRouteForPath(prdPath, 'read'));
+      _workbenchActivePrdContent = data.content || '';
+      prdBody.innerHTML = renderMd(_workbenchActivePrdContent);
+      _attachPrdClickListeners(prdBody);
+    }catch(e){
+      prdBody.innerHTML = '<div style="color:var(--red);padding:20px">Failed to load PRD: ' + e.message + '</div>';
+    }
+  }
+
+  // 3. Load BPMN content
+  await loadWorkbenchBpmn(bpmnPath);
+}
+
+async function loadWorkbenchBpmn(bpmnPath){
+  _workbenchActiveBpmnPath = bpmnPath;
+  const canvasEl = $('workbenchBpmnCanvas');
+  if(!canvasEl) return;
+  canvasEl.innerHTML = '';
+  if(_workbenchBpmnViewerInstance){
+    try{ _workbenchBpmnViewerInstance.destroy(); }catch(_){}
+    _workbenchBpmnViewerInstance = null;
+  }
+
+  try{
+    await loadBpmnViewerLibrary();
+    const data = await api(_workspaceRouteForPath(bpmnPath, 'read'));
+    _workbenchActiveBpmnXml = data.content || '';
+
+    _workbenchBpmnViewerInstance = new window.BpmnJS({
+      container: canvasEl
+    });
+    await _workbenchBpmnViewerInstance.importXML(_workbenchActiveBpmnXml);
+    const canvas = _workbenchBpmnViewerInstance.get('canvas');
+    canvas.zoom('fit-viewport');
+
+    // Wire up BPMN -> PRD click event!
+    const eventBus = _workbenchBpmnViewerInstance.get('eventBus');
+    eventBus.on('element.click', function(e){
+      const el = e.element;
+      if(el && el.businessObject && el.businessObject.name){
+        syncBpmnClickToPrd(el.businessObject.name, el.id);
+      }
+    });
+  }catch(err){
+    console.error('Failed to load workbench BPMN:', err);
+    canvasEl.innerHTML = '<div style="padding:20px;color:var(--red)">Failed to render BPMN: ' + err.message + '</div>';
+  }
+}
+
+function syncBpmnClickToPrd(nodeName, nodeId){
+  const prdBody = $('workbenchPrdBody');
+  if(!prdBody) return;
+
+  // Clean prior pulse highlights
+  prdBody.querySelectorAll('.workbench-highlight-pulse').forEach(el => {
+    el.classList.remove('workbench-highlight-pulse');
+  });
+
+  // Extract clean keywords
+  const words = nodeName.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 2 && !['dan','atau','dari','yang','untuk','the','and','for','sesi','alur','step','task','klik'].includes(w));
+
+  let matchedEl = null;
+  const candidates = prdBody.querySelectorAll('h1, h2, h3, h4, li, p, pre');
+
+  for(let i = 0; i < candidates.length; i++){
+    const text = candidates[i].textContent.toLowerCase();
+    const hitCount = words.filter(w => text.includes(w)).length;
+    if(hitCount >= Math.min(2, words.length) && hitCount > 0){
+      matchedEl = candidates[i];
+      break;
+    }
+  }
+
+  if(!matchedEl && words.length > 0){
+    for(let i = 0; i < candidates.length; i++){
+      if(candidates[i].textContent.toLowerCase().includes(words[0])){
+        matchedEl = candidates[i];
+        break;
+      }
+    }
+  }
+
+  if(matchedEl){
+    matchedEl.classList.add('workbench-highlight-pulse');
+    matchedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const banner = $('workbenchSyncText');
+    if(banner){
+      banner.textContent = '🎯 BPMN ➔ PRD: Found & highlighted "' + nodeName + '"';
+    }
+  } else {
+    const banner = $('workbenchSyncText');
+    if(banner){
+      banner.textContent = '📍 BPMN: Selected "' + nodeName + '"';
+    }
+  }
+}
+
+function _attachPrdClickListeners(container){
+  const items = container.querySelectorAll('h2, h3, h4, li, pre, p');
+  items.forEach(item => {
+    item.classList.add('workbench-prd-clickable');
+    item.title = 'Click to trace in linked BPMN flow';
+    item.addEventListener('click', function(e){
+      e.stopPropagation();
+      syncPrdClickToBpmn(item.textContent);
+    });
+  });
+}
+
+function syncPrdClickToBpmn(text){
+  if(!_workbenchBpmnViewerInstance) return;
+  const canvas = _workbenchBpmnViewerInstance.get('canvas');
+  const elementRegistry = _workbenchBpmnViewerInstance.get('elementRegistry');
+  if(!canvas || !elementRegistry) return;
+
+  const allElements = elementRegistry.getAll();
+  const cleanSearch = text.toLowerCase();
+
+  let matchedNode = null;
+  for(let i = 0; i < allElements.length; i++){
+    const name = (allElements[i].businessObject && allElements[i].businessObject.name) || '';
+    if(name && cleanSearch.includes(name.toLowerCase())){
+      matchedNode = allElements[i];
+      break;
+    }
+  }
+
+  if(matchedNode){
+    allElements.forEach(el => canvas.removeMarker(el.id, 'highlight-bpmn-node'));
+    canvas.addMarker(matchedNode.id, 'highlight-bpmn-node');
+    canvas.scrollToElement(matchedNode.id);
+    const banner = $('workbenchSyncText');
+    if(banner){
+      banner.textContent = '🎯 PRD ➔ BPMN: Traced to [' + (matchedNode.businessObject.name || matchedNode.id) + ']';
+    }
+  }
+}
+
+function changeWorkbenchFlow(newFlowPath){
+  if(newFlowPath){
+    loadWorkbenchBpmn(newFlowPath);
+  }
+}
+
+function workbenchFitBpmn(){
+  if(_workbenchBpmnViewerInstance){
+    try{
+      const canvas = _workbenchBpmnViewerInstance.get('canvas');
+      canvas.zoom('fit-viewport');
+    }catch(_){}
+  }
+}
+
 window.bpmnFitViewport = bpmnFitViewport;
 window.bpmnToggleRawXml = bpmnToggleRawXml;
 window._destroyBpmnViewer = _destroyBpmnViewer;
+window.openPreviewInGoogleDrive = openPreviewInGoogleDrive;
+window.exportBpmnSvg = exportBpmnSvg;
+window.workbenchExportSvg = workbenchExportSvg;
+window.toggleSplitWorkbench = toggleSplitWorkbench;
+window.changeWorkbenchFlow = changeWorkbenchFlow;
+window.workbenchFitBpmn = workbenchFitBpmn;
 
 async function openFile(path, opts={}){
   if(!S.session)return;
@@ -1227,6 +1542,20 @@ async function openFile(path, opts={}){
 
   _previewCurrentPath = path;
   renderFileBreadcrumb(path);
+
+  // Update visibility of Split Workbench and Drive buttons
+  const isPrdOrFlow = path.startsWith('PRD/') || path.startsWith('Flows/') || ext === '.md' || ext === '.bpmn';
+  const btnWb = $('btnToggleWorkbench');
+  if(btnWb){
+    btnWb.style.display = isPrdOrFlow ? 'inline-flex' : 'none';
+    const wbLabel = $('btnToggleWorkbenchLabel');
+    if(wbLabel) wbLabel.textContent = 'Split Workbench';
+  }
+  const btnDrive = $('btnOpenInDrive');
+  if(btnDrive){
+    btnDrive.style.display = (WORKSPACE_GDRIVE_MAP[path] || isPrdOrFlow) ? 'inline-flex' : 'none';
+  }
+
   if(IMAGE_EXTS.has(ext)){
     // Image: load via raw endpoint, show as <img>
     showPreview('image');

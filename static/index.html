@@ -70,6 +70,66 @@
   }
 })()</script>
 <link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__">
+<style>
+/* Hermes Split-Workbench & BPMN/PRD Sync */
+.rightpanel.workbench-mode-active {
+  width: min(86vw, 1280px) !important;
+  max-width: 90vw !important;
+  z-index: 95;
+  box-shadow: -8px 0 32px rgba(0,0,0,0.32);
+}
+.workbench-split-wrap {
+  display: none;
+  flex: 1;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  min-height: 540px;
+  gap: 12px;
+  position: relative;
+}
+.workbench-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  overflow: hidden;
+  min-width: 0;
+}
+.workbench-pane-prd {
+  background: var(--bg);
+}
+.workbench-pane-bpmn {
+  background: #ffffff;
+  position: relative;
+}
+.workbench-highlight-pulse {
+  animation: wbPulse 2.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+  border-left: 4px solid #3b82f6 !important;
+  background-color: rgba(59, 130, 246, 0.12) !important;
+  padding-left: 10px !important;
+  border-radius: 4px;
+}
+@keyframes wbPulse {
+  0% { background-color: rgba(59, 130, 246, 0.35); box-shadow: 0 0 12px rgba(59, 130, 246, 0.6); }
+  50% { background-color: rgba(59, 130, 246, 0.18); }
+  100% { background-color: transparent; }
+}
+.highlight-bpmn-node:not(.djs-connection) .djs-visual > :nth-child(1) {
+  stroke: #2563eb !important;
+  stroke-width: 4px !important;
+  fill: rgba(59, 130, 246, 0.22) !important;
+  filter: drop-shadow(0 0 8px rgba(37, 99, 235, 0.6));
+}
+.workbench-prd-clickable {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.workbench-prd-clickable:hover {
+  background: rgba(59, 130, 246, 0.08);
+}
+</style>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
   <!-- KaTeX math rendering CSS (loaded eagerly from vendored assets to prevent font CSP noise) -->
   <link rel="stylesheet" href="static/vendor/katex/0.16.22/katex.min.css">
@@ -1709,6 +1769,8 @@
       <div class="preview-path" id="previewPath">
         <span id="previewPathText"></span>
         <span class="preview-badge" id="previewBadge"></span>
+        <button id="btnToggleWorkbench" class="panel-icon-btn" style="font-size:12px;width:auto;padding:2px 8px;display:none;align-items:center;gap:4px;color:var(--blue);font-weight:600" onclick="toggleSplitWorkbench()" title="Toggle Split Workbench (PRD & BPMN)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18"/></svg> <span id="btnToggleWorkbenchLabel">Split Workbench</span></button>
+        <button id="btnOpenInDrive" class="panel-icon-btn" style="font-size:12px;width:auto;padding:2px 8px;display:none;align-items:center;gap:4px" onclick="openPreviewInGoogleDrive()" title="Open file in Google Drive"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2L2 19.5h20L12 2zm0 4.5l6.5 11h-13L12 6.5z"/></svg> <span class="preview-btn-label">Open in Drive</span></button>
         <button id="btnCopyPreviewRelPath" class="panel-icon-btn" style="font-size:12px;width:auto;padding:2px 8px;display:inline-flex;align-items:center;gap:4px" onclick="copyPreviewRelativePath()" title="Copy relative path" aria-label="Copy relative path" data-i18n-title="copy_relative_path" data-i18n-aria-label="copy_relative_path"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> <span class="preview-btn-label" data-i18n="copy_relative_path">Copy relative path</span></button>
         <button id="btnOpenInBrowser" class="panel-icon-btn" style="margin-left:auto;font-size:12px;width:auto;padding:2px 8px;display:none;align-items:center;gap:4px" onclick="openInBrowser()" title="Open in new browser tab"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> <span data-i18n="open_in_browser">Open in browser</span></button>
         <button id="btnRenderMarkdownAnyway" class="panel-icon-btn" style="font-size:12px;width:auto;padding:2px 8px;display:none;align-items:center;gap:4px" onclick="forceRenderMarkdownPreview()" title="Render this large file as rich Markdown"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/><path d="M7 8h10"/><path d="M7 12h10"/><path d="M7 16h6"/></svg> Render as markdown anyway</button>
@@ -1729,7 +1791,36 @@
         <div id="previewBpmnCanvas" style="width:100%;height:100%;min-height:480px;flex:1;"></div>
         <div class="preview-bpmn-controls" style="position:absolute;bottom:12px;right:12px;display:flex;gap:6px;z-index:10;">
           <button id="btnBpmnFit" class="panel-icon-btn" style="background:rgba(255,255,255,0.92);border:1px solid #ccc;color:#222;padding:4px 10px;font-size:12px;border-radius:5px;box-shadow:0 2px 6px rgba(0,0,0,0.15);cursor:pointer;" onclick="bpmnFitViewport()" title="Fit Diagram to Viewport">⛶ Fit View</button>
+          <button id="btnBpmnExportSvg" class="panel-icon-btn" style="background:rgba(255,255,255,0.92);border:1px solid #ccc;color:#222;padding:4px 10px;font-size:12px;border-radius:5px;box-shadow:0 2px 6px rgba(0,0,0,0.15);cursor:pointer;" onclick="exportBpmnSvg()" title="Export Diagram as SVG">💾 Export SVG</button>
           <button id="btnBpmnToggleView" class="panel-icon-btn" style="background:rgba(255,255,255,0.92);border:1px solid #ccc;color:#222;padding:4px 10px;font-size:12px;border-radius:5px;box-shadow:0 2px 6px rgba(0,0,0,0.15);cursor:pointer;" onclick="bpmnToggleRawXml()" title="Toggle XML / Diagram View">&lt;/&gt; Raw XML</button>
+        </div>
+      </div>
+      <!-- Dual-Engine Synchronized Split-Workbench (PRD <-> BPMN) -->
+      <div class="workbench-split-wrap" id="workbenchSplitWrap">
+        <!-- Left Column: PRD Specification Pane -->
+        <div class="workbench-pane workbench-pane-prd" id="workbenchPrdPane">
+          <div class="workbench-pane-header" style="padding:8px 12px;background:var(--sidebar);border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:600;">
+            <span id="workbenchPrdTitle">📄 PRD Specification</span>
+            <span style="font-size:11px;color:var(--muted);font-weight:normal;">Click any text to trace in BPMN</span>
+          </div>
+          <div class="workbench-prd-body" id="workbenchPrdBody" style="flex:1;overflow-y:auto;padding:16px 20px;line-height:1.6;font-size:13px;"></div>
+        </div>
+        <!-- Right Column: BPMN 2.0 Live Flow Pane -->
+        <div class="workbench-pane workbench-pane-bpmn" id="workbenchBpmnPane">
+          <div class="workbench-pane-header" style="padding:6px 10px;background:#f8f9fa;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;font-size:12px;gap:8px;z-index:5;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-weight:600;color:#1e293b;">📊 Linked Flow:</span>
+              <select id="workbenchFlowSelect" style="font-size:11px;padding:2px 6px;border-radius:4px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;" onchange="changeWorkbenchFlow(this.value)"></select>
+            </div>
+            <div style="display:flex;gap:4px;">
+              <button class="panel-icon-btn" style="padding:2px 8px;font-size:11px;background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:4px;cursor:pointer;" onclick="workbenchFitBpmn()" title="Fit View">⛶ Fit</button>
+              <button class="panel-icon-btn" style="padding:2px 8px;font-size:11px;background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:4px;cursor:pointer;" onclick="workbenchExportSvg()" title="Export SVG">💾 SVG</button>
+            </div>
+          </div>
+          <div id="workbenchBpmnCanvas" style="flex:1;width:100%;height:100%;min-height:480px;"></div>
+          <div id="workbenchSyncBanner" style="position:absolute;bottom:10px;left:10px;right:10px;background:rgba(15,23,42,0.88);color:#fff;padding:6px 12px;border-radius:6px;font-size:11px;display:flex;align-items:center;justify-content:space-between;backdrop-filter:blur(4px);pointer-events:none;transition:opacity 0.3s;z-index:20;">
+            <span id="workbenchSyncText">⚡ Bidirectional Sync Active — Click any task in BPMN to highlight PRD</span>
+          </div>
         </div>
       </div>
       <textarea id="previewEditArea" style="display:none;flex:1;width:100%;background:var(--code-bg);color:var(--pre-text);border:1px solid var(--border2);border-radius:8px;padding:12px;font-family:var(--font-mono);font-size:12px;line-height:1.6;resize:none;outline:none" oninput="_previewDirty=true;updateEditBtn()"></textarea>
