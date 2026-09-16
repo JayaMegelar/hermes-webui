@@ -1996,3 +1996,348 @@ if (typeof document !== 'undefined') {
     _wsUploadInit();
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// DEDICATED PRODUCT ENGINEERING STUDIO CONTROLLER
+// ═══════════════════════════════════════════════════════════════════════
+
+let _studioBpmnViewerInstance = null;
+let _studioCurrentPrdPath = 'PRD/PRD_EMS_Master_Bimbel.md';
+let _studioCurrentBpmnPath = 'Flows/ems_master_workflow.bpmn';
+let _studioPrdRawText = '';
+
+const STUDIO_ARTIFACTS_DATA = {
+  prds: [
+    { path: 'PRD/PRD_EMS_Master_Bimbel.md', title: 'EMS Master Blueprint', desc: 'Arsitektur Global Bimbel As-Is' },
+    { path: 'PRD/PRD_EMS_00_Master_Data_Architecture.md', title: '0. Master Data Architecture', desc: 'Piramida Hirarki & Tata Kelola' },
+    { path: 'PRD/PRD_EMS_01_Admission_Trial.md', title: '1. Admission & Trial Class', desc: 'Pendaftaran & Fast-Track Trial' },
+    { path: 'PRD/PRD_EMS_02_Fees_Billing.md', title: '2. Fees & Invoicing', desc: 'Tagihan SPP & Integrasi Akuntansi' },
+    { path: 'PRD/PRD_EMS_03_Timetable_Attendance.md', title: '3. Timetable & Attendance', desc: 'Jadwal Bebas Bentrok & Presensi 1-Klik' },
+    { path: 'PRD/PRD_EMS_04_Assessment_Gradebook_Parent.md', title: '4. Evaluation & Gradebook', desc: 'Tryout CBT & Rapor Ortu' },
+    { path: 'PRD/PRD_Hermes_WebUI_Product_Analyst_Suite.md', title: 'Hermes WebUI Suite PRD', desc: 'Spesifikasi Fitur Analis' }
+  ],
+  flows: [
+    { path: 'Flows/ems_master_workflow.bpmn', name: 'Master End-to-End Workflow' },
+    { path: 'Flows/flow_master_data_setup.bpmn', name: '0. Master Data Setup' },
+    { path: 'Flows/flow_admission_trial.bpmn', name: '1. Admission & Trial Class' },
+    { path: 'Flows/flow_fees_invoicing.bpmn', name: '2. Fees & Invoicing' },
+    { path: 'Flows/flow_attendance_session.bpmn', name: '3. Session & Attendance' },
+    { path: 'Flows/flow_gradebook_eval.bpmn', name: '4. Tryout & Gradebook' }
+  ]
+};
+
+function switchAppMode(mode){
+  const validMode = (mode === 'studio') ? 'studio' : 'chat';
+  document.documentElement.dataset.appMode = validMode;
+
+  const btnChat = $('btnAppModeChat');
+  const btnStudio = $('btnAppModeStudio');
+  const railStudio = $('railBtnStudio');
+  const navStudio = $('sidebarNavStudio');
+
+  if(btnChat && btnStudio){
+    if(validMode === 'studio'){
+      btnChat.style.background = 'transparent';
+      btnChat.style.color = 'var(--text)';
+      btnStudio.style.background = 'var(--blue)';
+      btnStudio.style.color = '#fff';
+    } else {
+      btnChat.style.background = 'var(--blue)';
+      btnChat.style.color = '#fff';
+      btnStudio.style.background = 'transparent';
+      btnStudio.style.color = 'var(--text)';
+    }
+  }
+
+  if(railStudio) railStudio.classList.toggle('active', validMode === 'studio');
+  if(navStudio) navStudio.classList.toggle('active', validMode === 'studio');
+
+  if(validMode === 'studio'){
+    initProductStudio();
+  }
+}
+
+async function initProductStudio(){
+  renderStudioArtifactTree();
+
+  const flowSelect = $('studioActiveFlowSelect');
+  if(flowSelect){
+    flowSelect.innerHTML = '';
+    STUDIO_ARTIFACTS_DATA.flows.forEach(flow => {
+      const opt = document.createElement('option');
+      opt.value = flow.path;
+      opt.textContent = flow.name;
+      if(flow.path === _studioCurrentBpmnPath) opt.selected = true;
+      flowSelect.appendChild(opt);
+    });
+  }
+
+  await loadStudioPrd(_studioCurrentPrdPath);
+}
+
+function renderStudioArtifactTree(){
+  const treeContainer = $('studioArtifactTree');
+  if(!treeContainer) return;
+
+  let html = '';
+
+  // PRD Group
+  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:8px 6px 4px 6px;">PRD Specifications (' + STUDIO_ARTIFACTS_DATA.prds.length + ')</div>';
+  STUDIO_ARTIFACTS_DATA.prds.forEach(prd => {
+    const isActive = (prd.path === _studioCurrentPrdPath);
+    html += '<div class="studio-tree-item ' + (isActive ? 'active' : '') + '" onclick="loadStudioPrd(\'' + prd.path + '\')">';
+    html += '  <span style="font-size:13px;">📄</span>';
+    html += '  <div style="flex:1;min-width:0;">';
+    html += '    <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + prd.title + '</div>';
+    html += '    <div style="font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + prd.desc + '</div>';
+    html += '  </div>';
+    html += '</div>';
+  });
+
+  // Flows Group
+  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:16px 6px 4px 6px;">BPMN 2.0 Flows (' + STUDIO_ARTIFACTS_DATA.flows.length + ')</div>';
+  STUDIO_ARTIFACTS_DATA.flows.forEach(flow => {
+    const isActive = (flow.path === _studioCurrentBpmnPath);
+    html += '<div class="studio-tree-item ' + (isActive ? 'active' : '') + '" onclick="selectStudioFlowFromTree(\'' + flow.path + '\')">';
+    html += '  <span style="font-size:13px;">📊</span>';
+    html += '  <div style="flex:1;min-width:0;">';
+    html += '    <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + flow.name + '</div>';
+    html += '    <div style="font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + flow.path + '</div>';
+    html += '  </div>';
+    html += '</div>';
+  });
+
+  treeContainer.innerHTML = html;
+}
+
+async function loadStudioPrd(prdPath){
+  _studioCurrentPrdPath = prdPath;
+  const titleEl = $('studioActivePrdTitle');
+  const viewerEl = $('studioPrdViewer');
+  if(!viewerEl) return;
+
+  if(titleEl){
+    titleEl.textContent = '📄 ' + (prdPath.split('/').pop() || 'PRD Specification');
+    titleEl.title = prdPath;
+  }
+
+  viewerEl.innerHTML = '<div style="padding:20px;color:var(--muted)">Loading specification...</div>';
+  renderStudioArtifactTree();
+
+  try{
+    const data = await api(_workspaceRouteForPath(prdPath, 'read'));
+    _studioPrdRawText = data.content || '';
+    viewerEl.innerHTML = renderMd(_studioPrdRawText);
+    _attachStudioPrdListeners(viewerEl);
+  }catch(err){
+    viewerEl.innerHTML = '<div style="color:var(--red);padding:20px">Failed to load PRD: ' + err.message + '</div>';
+  }
+
+  const matchingFlow = WORKBENCH_PAIR_MAP[prdPath];
+  if(matchingFlow && matchingFlow !== _studioCurrentBpmnPath){
+    await loadStudioBpmn(matchingFlow);
+    const flowSelect = $('studioActiveFlowSelect');
+    if(flowSelect) flowSelect.value = matchingFlow;
+  }
+}
+
+async function loadStudioBpmn(bpmnPath){
+  _studioCurrentBpmnPath = bpmnPath;
+  const canvasEl = $('studioBpmnContainer');
+  if(!canvasEl) return;
+  canvasEl.innerHTML = '';
+
+  if(_studioBpmnViewerInstance){
+    try{ _studioBpmnViewerInstance.destroy(); }catch(_){}
+    _studioBpmnViewerInstance = null;
+  }
+
+  renderStudioArtifactTree();
+
+  try{
+    await loadBpmnViewerLibrary();
+    const data = await api(_workspaceRouteForPath(bpmnPath, 'read'));
+    const xml = data.content || '';
+
+    _studioBpmnViewerInstance = new window.BpmnJS({
+      container: canvasEl
+    });
+    await _studioBpmnViewerInstance.importXML(xml);
+    const canvas = _studioBpmnViewerInstance.get('canvas');
+    canvas.zoom('fit-viewport');
+
+    const eventBus = _studioBpmnViewerInstance.get('eventBus');
+    eventBus.on('element.click', function(e){
+      const el = e.element;
+      if(el && el.businessObject && el.businessObject.name){
+        syncStudioBpmnClickToPrd(el.businessObject.name, el.id);
+      }
+    });
+  }catch(err){
+    console.error('Failed to load Studio BPMN:', err);
+    canvasEl.innerHTML = '<div style="padding:20px;color:var(--red)">Failed to render BPMN: ' + err.message + '</div>';
+  }
+}
+
+function syncStudioBpmnClickToPrd(nodeName, nodeId){
+  const viewer = $('studioPrdViewer');
+  if(!viewer) return;
+
+  viewer.querySelectorAll('.workbench-highlight-pulse').forEach(el => {
+    el.classList.remove('workbench-highlight-pulse');
+  });
+
+  const words = nodeName.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 2 && !['dan','atau','dari','yang','untuk','the','and','for','sesi','alur','step','task','klik'].includes(w));
+
+  let matchedEl = null;
+  const candidates = viewer.querySelectorAll('h1, h2, h3, h4, li, p, pre');
+
+  for(let i = 0; i < candidates.length; i++){
+    const text = candidates[i].textContent.toLowerCase();
+    const hitCount = words.filter(w => text.includes(w)).length;
+    if(hitCount >= Math.min(2, words.length) && hitCount > 0){
+      matchedEl = candidates[i];
+      break;
+    }
+  }
+
+  if(!matchedEl && words.length > 0){
+    for(let i = 0; i < candidates.length; i++){
+      if(candidates[i].textContent.toLowerCase().includes(words[0])){
+        matchedEl = candidates[i];
+        break;
+      }
+    }
+  }
+
+  const syncBanner = $('studioSyncStatusText');
+  if(matchedEl){
+    matchedEl.classList.add('workbench-highlight-pulse');
+    matchedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if(syncBanner) syncBanner.textContent = '🎯 Flow ➔ PRD: Found & highlighted "' + nodeName + '"';
+  } else {
+    if(syncBanner) syncBanner.textContent = '📍 Flow: Selected "' + nodeName + '"';
+  }
+}
+
+function _attachStudioPrdListeners(container){
+  const items = container.querySelectorAll('h2, h3, h4, li, pre, p');
+  items.forEach(item => {
+    item.classList.add('workbench-prd-clickable');
+    item.title = 'Click to trace in linked BPMN flow';
+    item.addEventListener('click', function(e){
+      e.stopPropagation();
+      syncStudioPrdClickToBpmn(item.textContent);
+    });
+  });
+}
+
+function syncStudioPrdClickToBpmn(text){
+  if(!_studioBpmnViewerInstance) return;
+  const canvas = _studioBpmnViewerInstance.get('canvas');
+  const elementRegistry = _studioBpmnViewerInstance.get('elementRegistry');
+  if(!canvas || !elementRegistry) return;
+
+  const allElements = elementRegistry.getAll();
+  const cleanSearch = text.toLowerCase();
+
+  let matchedNode = null;
+  for(let i = 0; i < allElements.length; i++){
+    const name = (allElements[i].businessObject && allElements[i].businessObject.name) || '';
+    if(name && cleanSearch.includes(name.toLowerCase())){
+      matchedNode = allElements[i];
+      break;
+    }
+  }
+
+  const syncBanner = $('studioSyncStatusText');
+  if(matchedNode){
+    allElements.forEach(el => canvas.removeMarker(el.id, 'highlight-bpmn-node'));
+    canvas.addMarker(matchedNode.id, 'highlight-bpmn-node');
+    canvas.scrollToElement(matchedNode.id);
+    if(syncBanner) syncBanner.textContent = '🎯 PRD ➔ Flow: Traced to [' + (matchedNode.businessObject.name || matchedNode.id) + ']';
+  }
+}
+
+function selectStudioFlowFromTree(flowPath){
+  const select = $('studioActiveFlowSelect');
+  if(select) select.value = flowPath;
+  loadStudioBpmn(flowPath);
+}
+
+function changeStudioFlow(flowPath){
+  if(flowPath) loadStudioBpmn(flowPath);
+}
+
+function studioFitBpmn(){
+  if(_studioBpmnViewerInstance){
+    try{
+      const canvas = _studioBpmnViewerInstance.get('canvas');
+      canvas.zoom('fit-viewport');
+    }catch(_){}
+  }
+}
+
+async function studioExportSvg(){
+  if(!_studioBpmnViewerInstance) return;
+  try{
+    const { svg } = await _studioBpmnViewerInstance.saveSVG({ format: true });
+    _downloadSvgBlob(svg, _studioCurrentBpmnPath || 'studio_diagram');
+  }catch(e){
+    console.error('Studio export SVG failed', e);
+  }
+}
+
+function openStudioDriveFolder(){
+  window.open('https://drive.google.com/drive/u/0/folders/Hermes_Artifacts', '_blank', 'noopener,noreferrer');
+}
+
+function openStudioPrdDrive(){
+  const link = WORKSPACE_GDRIVE_MAP[_studioCurrentPrdPath];
+  if(link){
+    window.open(link, '_blank', 'noopener,noreferrer');
+  } else {
+    openStudioDriveFolder();
+  }
+}
+
+async function copyStudioPrdMarkdown(){
+  if(!_studioPrdRawText) return;
+  try{
+    await navigator.clipboard.writeText(_studioPrdRawText);
+    if(typeof showToast==='function') showToast('PRD Markdown copied to clipboard!');
+  }catch(e){
+    console.error('Copy PRD failed', e);
+  }
+}
+
+function refreshStudioArtifacts(){
+  renderStudioArtifactTree();
+  if(typeof showToast==='function') showToast('Artifact list refreshed');
+}
+
+// Global hotkey: Alt+S toggles between Chat and Product Studio!
+document.addEventListener('keydown', function(e){
+  if((e.altKey && (e.key === 's' || e.key === 'S')) || (e.ctrlKey && e.shiftKey && (e.key === 'p' || e.key === 'P'))){
+    e.preventDefault();
+    const currentMode = document.documentElement.dataset.appMode || 'chat';
+    switchAppMode(currentMode === 'studio' ? 'chat' : 'studio');
+  }
+  if(e.key === 'Escape' && document.documentElement.dataset.appMode === 'studio'){
+    switchAppMode('chat');
+  }
+});
+
+window.switchAppMode = switchAppMode;
+window.initProductStudio = initProductStudio;
+window.loadStudioPrd = loadStudioPrd;
+window.loadStudioBpmn = loadStudioBpmn;
+window.selectStudioFlowFromTree = selectStudioFlowFromTree;
+window.changeStudioFlow = changeStudioFlow;
+window.studioFitBpmn = studioFitBpmn;
+window.studioExportSvg = studioExportSvg;
+window.openStudioDriveFolder = openStudioDriveFolder;
+window.openStudioPrdDrive = openStudioPrdDrive;
+window.copyStudioPrdMarkdown = copyStudioPrdMarkdown;
+window.refreshStudioArtifacts = refreshStudioArtifacts;
+
