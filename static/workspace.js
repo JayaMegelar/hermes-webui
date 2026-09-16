@@ -2082,11 +2082,11 @@ function renderStudioArtifactTree(){
   let html = '';
 
   // PRD Group
-  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:8px 6px 4px 6px;">PRD Specifications (' + STUDIO_ARTIFACTS_DATA.prds.length + ')</div>';
+  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:8px 6px 4px 6px;">PRD Specifications (' + STUDIO_ARTIFACTS_DATA.prds.length + ')</div>';
   STUDIO_ARTIFACTS_DATA.prds.forEach(prd => {
     const isActive = (prd.path === _studioCurrentPrdPath);
     html += '<div class="studio-tree-item ' + (isActive ? 'active' : '') + '" onclick="loadStudioPrd(\'' + prd.path + '\')">';
-    html += '  <span style="font-size:13px;">📄</span>';
+    html += '  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--blue);flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
     html += '  <div style="flex:1;min-width:0;">';
     html += '    <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + prd.title + '</div>';
     html += '    <div style="font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + prd.desc + '</div>';
@@ -2095,11 +2095,11 @@ function renderStudioArtifactTree(){
   });
 
   // Flows Group
-  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:16px 6px 4px 6px;">BPMN 2.0 Flows (' + STUDIO_ARTIFACTS_DATA.flows.length + ')</div>';
+  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:16px 6px 4px 6px;">BPMN 2.0 Flows (' + STUDIO_ARTIFACTS_DATA.flows.length + ')</div>';
   STUDIO_ARTIFACTS_DATA.flows.forEach(flow => {
     const isActive = (flow.path === _studioCurrentBpmnPath);
     html += '<div class="studio-tree-item ' + (isActive ? 'active' : '') + '" onclick="selectStudioFlowFromTree(\'' + flow.path + '\')">';
-    html += '  <span style="font-size:13px;">📊</span>';
+    html += '  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#8b5cf6;flex-shrink:0;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>';
     html += '  <div style="flex:1;min-width:0;">';
     html += '    <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + flow.name + '</div>';
     html += '    <div style="font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + flow.path + '</div>';
@@ -2316,15 +2316,39 @@ function refreshStudioArtifacts(){
   if(typeof showToast==='function') showToast('Artifact list refreshed');
 }
 
-// Global hotkey: Alt+S toggles between Chat and Product Studio!
+function toggleStudioNav(){
+  const studioView = $('productStudioView');
+  if(!studioView) return;
+  studioView.classList.toggle('studio-nav-collapsed');
+  const isCollapsed = studioView.classList.contains('studio-nav-collapsed');
+  const label = $('labelStudioNav');
+  if(label) label.textContent = isCollapsed ? 'Show' : 'Sidebar';
+  setTimeout(() => {
+    studioFitBpmn();
+  }, 220);
+}
+
+// Global hotkeys:
+// 1. Alt+S: Toggles between Chat and Product Studio!
+// 2. Escape: Returns from Studio to Chat!
+// 3. '[': Toggles Artifact Explorer sidebar inside Studio!
 document.addEventListener('keydown', function(e){
+  // Check if user is typing in an input or textarea
+  const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
+
   if((e.altKey && (e.key === 's' || e.key === 'S')) || (e.ctrlKey && e.shiftKey && (e.key === 'p' || e.key === 'P'))){
     e.preventDefault();
     const currentMode = document.documentElement.dataset.appMode || 'chat';
     switchAppMode(currentMode === 'studio' ? 'chat' : 'studio');
+    return;
   }
   if(e.key === 'Escape' && document.documentElement.dataset.appMode === 'studio'){
     switchAppMode('chat');
+    return;
+  }
+  if(!isTyping && e.key === '[' && document.documentElement.dataset.appMode === 'studio'){
+    e.preventDefault();
+    toggleStudioNav();
   }
 });
 
@@ -2340,4 +2364,5 @@ window.openStudioDriveFolder = openStudioDriveFolder;
 window.openStudioPrdDrive = openStudioPrdDrive;
 window.copyStudioPrdMarkdown = copyStudioPrdMarkdown;
 window.refreshStudioArtifacts = refreshStudioArtifacts;
+window.toggleStudioNav = toggleStudioNav;
 

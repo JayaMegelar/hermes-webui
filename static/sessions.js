@@ -1688,6 +1688,11 @@ async function _switchProfileForSessionLoad(profile){
 
 async function loadSession(sid){
   const opts = arguments[1] || {};
+
+  // Auto-dismiss Product Studio when opening any session
+  if (typeof switchAppMode === 'function' && document.documentElement.dataset.appMode === 'studio') {
+    switchAppMode('chat');
+  }
   // Resolve canonical lineage SID BEFORE both the direct and sidebar preload
   // notifications so extensions always see the canonical session id, not the
   // raw sidebar click id (which may differ after lineage folding).

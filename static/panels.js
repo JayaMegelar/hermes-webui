@@ -393,6 +393,12 @@ function _syncMobileSidebarPanelFromMainView(){
 async function switchPanel(name, opts = {}) {
   const nextPanel = name || 'chat';
   const prevPanel = _currentPanel;
+
+  // Auto-dismiss Product Studio when switching to any standard panel
+  if (typeof switchAppMode === 'function' && document.documentElement.dataset.appMode === 'studio') {
+    switchAppMode('chat');
+  }
+
   // ── Desktop sidebar collapse toggle (rail-click only) ──
   // If the click came from a rail icon AND we're on desktop, the rail icon
   // does double duty: clicking the already-active panel collapses the sidebar;

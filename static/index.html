@@ -165,6 +165,117 @@ html[data-app-mode="studio"] .product-studio-view {
   color: var(--blue);
   font-weight: 600;
 }
+/* Studio Collapsible Navigation & Fluid Layout */
+.product-studio-view.studio-nav-collapsed .studio-col-nav {
+  display: none !important;
+}
+.studio-col-nav {
+  transition: width 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* Dark Mode Parity: Soft Slate BPMN Canvas (Eliminating White Glare) */
+:root.dark #studioBpmnContainer,
+:root.dark #previewBpmnCanvas,
+:root.dark #workbenchBpmnCanvas,
+:root.dark .workbench-pane-bpmn {
+  background: #141422 !important;
+}
+:root.dark #studioBpmnContainer svg,
+:root.dark #previewBpmnCanvas svg,
+:root.dark #workbenchBpmnCanvas svg {
+  background: #141422 !important;
+}
+:root.dark .djs-element:not(.djs-connection) .djs-visual > rect,
+:root.dark .djs-element:not(.djs-connection) .djs-visual > circle,
+:root.dark .djs-element:not(.djs-connection) .djs-visual > polygon {
+  stroke: #818cf8 !important;
+  fill: #1c1c32 !important;
+}
+:root.dark .djs-visual text,
+:root.dark .djs-label {
+  fill: #e2e8f0 !important;
+}
+:root.dark .djs-connection .djs-visual > path {
+  stroke: #94a3b8 !important;
+}
+:root.dark .djs-connection .djs-visual > polygon {
+  fill: #94a3b8 !important;
+  stroke: #94a3b8 !important;
+}
+:root.dark .studio-pane-header,
+:root.dark .workbench-pane-header {
+  background: #19192c !important;
+  border-bottom: 1px solid #282845 !important;
+  color: #e2e8f0 !important;
+}
+:root.dark #studioActiveFlowSelect,
+:root.dark #workbenchFlowSelect {
+  background: #23233c !important;
+  color: #f1f5f9 !important;
+  border: 1px solid #3b3b60 !important;
+}
+/* Notion / Linear Reading Typography for PRD */
+#studioPrdViewer, #workbenchPrdBody {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+  color: var(--text, #e2e8f0);
+  line-height: 1.75;
+  letter-spacing: -0.012em;
+  max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
+}
+#studioPrdViewer h1, #workbenchPrdBody h1 {
+  font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  margin-top: 1.8rem;
+  margin-bottom: 0.8rem;
+  border-bottom: 1px solid var(--border2);
+  padding-bottom: 0.4rem;
+  color: var(--text);
+}
+#studioPrdViewer h2, #workbenchPrdBody h2 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-top: 1.6rem;
+  margin-bottom: 0.6rem;
+  color: var(--text);
+}
+#studioPrdViewer h3, #workbenchPrdBody h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin-top: 1.3rem;
+  margin-bottom: 0.4rem;
+  color: var(--text);
+}
+#studioPrdViewer pre, #workbenchPrdBody pre {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 14px 0;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+#studioPrdViewer table, #workbenchPrdBody table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 12.5px;
+}
+#studioPrdViewer th, #workbenchPrdBody th {
+  background: var(--surface-subtle, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--border2);
+  padding: 8px 12px;
+  font-weight: 600;
+  text-align: left;
+}
+#studioPrdViewer td, #workbenchPrdBody td {
+  border: 1px solid var(--border2);
+  padding: 8px 12px;
+}
 </style>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
   <!-- KaTeX math rendering CSS (loaded eagerly from vendored assets to prevent font CSP noise) -->
@@ -232,12 +343,14 @@ html[data-app-mode="studio"] .product-studio-view {
     <span class="app-titlebar-title" id="appTitlebarTitle">Hermes</span>
     <span class="app-titlebar-sub" id="appTitlebarSub" hidden></span>
   </div>
-  <div class="app-mode-nav" id="appModeNav" style="display:inline-flex;align-items:center;background:var(--surface);border:1px solid var(--border2);border-radius:20px;padding:2px;gap:2px;margin:0 14px;box-shadow:0 1px 4px rgba(0,0,0,0.06);z-index:10;">
-    <button type="button" id="btnAppModeChat" class="app-mode-btn active" onclick="switchAppMode('chat')" style="border:none;background:var(--blue);color:#fff;border-radius:16px;padding:3px 12px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:5px;cursor:pointer;transition:all 0.15s ease;">
-      <span>💬 Council Chat</span>
+  <div class="app-mode-nav" id="appModeNav" style="display:inline-flex;align-items:center;background:var(--surface);border:1px solid var(--border2);border-radius:20px;padding:2px;gap:3px;margin:0 14px;box-shadow:0 1px 4px rgba(0,0,0,0.06);z-index:10;">
+    <button type="button" id="btnAppModeChat" class="app-mode-btn active" onclick="switchAppMode('chat')" style="border:none;background:var(--blue);color:#fff;border-radius:16px;padding:4px 12px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px;cursor:pointer;transition:all 0.15s ease;" title="Council Chat (Esc)">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span>Council Chat</span>
     </button>
-    <button type="button" id="btnAppModeStudio" class="app-mode-btn" onclick="switchAppMode('studio')" style="border:none;background:transparent;color:var(--text);border-radius:16px;padding:3px 12px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:5px;cursor:pointer;transition:all 0.15s ease;">
-      <span>📐 Product Studio</span>
+    <button type="button" id="btnAppModeStudio" class="app-mode-btn" onclick="switchAppMode('studio')" style="border:none;background:transparent;color:var(--text);border-radius:16px;padding:4px 12px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px;cursor:pointer;transition:all 0.15s ease;" title="Product Studio (Alt+S)">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
+      <span>Product Studio</span>
     </button>
   </div>
   <div class="app-titlebar-spacer" aria-hidden="true"></div>
@@ -1874,67 +1987,72 @@ html[data-app-mode="studio"] .product-studio-view {
   </aside>
   <!-- Dedicated Product Engineering Studio Full-Page View -->
   <div class="product-studio-view" id="productStudioView" style="display:none;flex:1;flex-direction:column;height:100%;min-width:0;background:var(--bg);overflow:hidden;z-index:20;">
-    <!-- Studio Top Toolbar -->
+    <!-- Studio Top Toolbar (Clean Vector Design, No Emoji) -->
     <div class="studio-topbar" style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:var(--sidebar);border-bottom:1px solid var(--border2);font-size:12px;gap:12px;flex-shrink:0;">
       <div style="display:flex;align-items:center;gap:12px;">
+        <button class="panel-icon-btn" id="btnToggleStudioNav" onclick="toggleStudioNav()" title="Toggle Navigator Sidebar ( [ )" style="padding:4px 8px;font-size:11.5px;display:inline-flex;align-items:center;gap:5px;border-radius:6px;cursor:pointer;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+          <span id="labelStudioNav">Sidebar</span>
+        </button>
         <span style="font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;color:var(--text);">
-          <span style="font-size:16px;">📐</span> Product Engineering Studio
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--blue);"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
+          <span>Product Engineering Studio</span>
         </span>
         <span style="color:var(--border2);">|</span>
         <div style="display:flex;align-items:center;gap:14px;color:var(--muted);font-size:11.5px;">
-          <span>📄 PRDs: <strong id="studioPrdCount" style="color:var(--text);">6 Docs</strong></span>
-          <span>📊 Flows: <strong id="studioFlowCount" style="color:var(--text);">6 BPMN</strong></span>
-          <span>☁️ Google Drive: <span style="color:#22c55e;font-weight:600;">Connected</span></span>
+          <span style="display:inline-flex;align-items:center;gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> PRDs: <strong id="studioPrdCount" style="color:var(--text);">7 Docs</strong></span>
+          <span style="display:inline-flex;align-items:center;gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> Flows: <strong id="studioFlowCount" style="color:var(--text);">6 BPMN</strong></span>
+          <span style="display:inline-flex;align-items:center;gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 19.5h20L12 2zm0 4.5l6.5 11h-13L12 6.5z"/></svg> Drive: <span style="color:#22c55e;font-weight:600;">Connected</span></span>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
-        <button class="panel-icon-btn" style="padding:4px 10px;font-size:12px;display:inline-flex;align-items:center;gap:5px;border-radius:6px;cursor:pointer;" onclick="openStudioDriveFolder()" title="Open in Google Drive">
+        <button class="panel-icon-btn" style="padding:4px 10px;font-size:12px;display:inline-flex;align-items:center;gap:5px;border-radius:6px;cursor:pointer;" onclick="openStudioDriveFolder()" title="Open Artifacts in Google Drive">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 19.5h20L12 2zm0 4.5l6.5 11h-13L12 6.5z"/></svg> <span>Open Drive Folder</span>
         </button>
-        <button class="panel-icon-btn" style="padding:4px 12px;font-size:12px;display:inline-flex;align-items:center;gap:5px;border-radius:6px;color:var(--blue);font-weight:600;border:1px solid rgba(59,130,246,0.3);cursor:pointer;" onclick="switchAppMode('chat')" title="Back to Chat (Esc)">
-          💬 Back to Chat
+        <button class="panel-icon-btn" style="padding:4px 12px;font-size:12px;display:inline-flex;align-items:center;gap:6px;border-radius:6px;color:var(--blue);font-weight:600;border:1px solid rgba(59,130,246,0.3);cursor:pointer;" onclick="switchAppMode('chat')" title="Back to Chat (Esc)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> <span>Back to Chat</span>
         </button>
       </div>
     </div>
 
     <!-- Studio 3-Column Body -->
     <div class="studio-workspace-grid" style="display:flex;flex:1;height:calc(100% - 45px);width:100%;overflow:hidden;">
-      <!-- Column 1: Artifact Navigator (22%) -->
+      <!-- Column 1: Artifact Navigator (Collapsible) -->
       <div class="studio-col studio-col-nav" style="width:260px;min-width:220px;max-width:320px;background:var(--sidebar);border-right:1px solid var(--border2);display:flex;flex-direction:column;flex-shrink:0;">
         <div style="padding:10px 14px;border-bottom:1px solid var(--border2);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;">
-          <span>📁 Artifact Explorer</span>
-          <button class="panel-icon-btn" onclick="refreshStudioArtifacts()" style="padding:2px 4px;font-size:11px;cursor:pointer;" title="Refresh Files">🔄</button>
+          <span style="display:inline-flex;align-items:center;gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Artifact Explorer</span>
+          <button class="panel-icon-btn" onclick="refreshStudioArtifacts()" style="padding:2px 4px;font-size:11px;cursor:pointer;" title="Refresh Files"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
         </div>
         <div id="studioArtifactTree" style="flex:1;overflow-y:auto;padding:8px;"></div>
       </div>
 
-      <!-- Column 2: PRD Specification Viewer (39%) -->
+      <!-- Column 2: PRD Specification Viewer (Responsive 50% when nav collapsed) -->
       <div class="studio-col studio-col-prd" style="flex:1;display:flex;flex-direction:column;border-right:1px solid var(--border2);background:var(--bg);min-width:320px;">
-        <div style="padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:600;flex-shrink:0;">
-          <span id="studioActivePrdTitle" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;">📄 PRD Specification</span>
+        <div class="studio-pane-header" style="padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:600;flex-shrink:0;">
+          <span id="studioActivePrdTitle" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;display:inline-flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> <span>PRD Specification</span></span>
           <div style="display:flex;gap:6px;">
-            <button class="panel-icon-btn" id="btnStudioPrdDrive" onclick="openStudioPrdDrive()" style="padding:2px 8px;font-size:11px;cursor:pointer;" title="Open this PRD in Google Drive">☁️ Drive</button>
-            <button class="panel-icon-btn" onclick="copyStudioPrdMarkdown()" style="padding:2px 8px;font-size:11px;cursor:pointer;" title="Copy Markdown Content">📋 Copy</button>
+            <button class="panel-icon-btn" id="btnStudioPrdDrive" onclick="openStudioPrdDrive()" style="padding:3px 8px;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;" title="Open this PRD in Google Drive"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 19.5h20L12 2zm0 4.5l6.5 11h-13L12 6.5z"/></svg> <span>Drive</span></button>
+            <button class="panel-icon-btn" onclick="copyStudioPrdMarkdown()" style="padding:3px 8px;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;" title="Copy Markdown Content"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> <span>Copy</span></button>
           </div>
         </div>
         <div id="studioPrdViewer" style="flex:1;overflow-y:auto;padding:24px 28px;line-height:1.7;font-size:13.5px;"></div>
       </div>
 
-      <!-- Column 3: BPMN 2.0 Live Flow Canvas (39%) -->
-      <div class="studio-col studio-col-bpmn" style="flex:1;display:flex;flex-direction:column;background:#ffffff;min-width:340px;position:relative;">
-        <div style="padding:6px 12px;background:#f8f9fa;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;font-size:12px;gap:8px;z-index:5;flex-shrink:0;">
+      <!-- Column 3: BPMN 2.0 Live Flow Canvas (Responsive 50% when nav collapsed) -->
+      <div class="studio-col studio-col-bpmn" style="flex:1;display:flex;flex-direction:column;min-width:340px;position:relative;">
+        <div class="studio-pane-header" style="padding:6px 12px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;font-size:12px;gap:8px;z-index:5;flex-shrink:0;">
           <div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-weight:600;color:#0f172a;">📊 Linked Flow:</span>
+            <span style="font-weight:600;display:inline-flex;align-items:center;gap:4px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> Flow:</span>
             <select id="studioActiveFlowSelect" style="font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;max-width:220px;" onchange="changeStudioFlow(this.value)"></select>
           </div>
           <div style="display:flex;gap:4px;">
-            <button class="panel-icon-btn" style="padding:2px 8px;font-size:11px;background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:4px;cursor:pointer;" onclick="studioFitBpmn()" title="Fit Diagram to Viewport">⛶ Fit</button>
-            <button class="panel-icon-btn" style="padding:2px 8px;font-size:11px;background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:4px;cursor:pointer;" onclick="studioExportSvg()" title="Export Diagram as SVG">💾 SVG</button>
+            <button class="panel-icon-btn" style="padding:3px 8px;font-size:11px;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;" onclick="studioFitBpmn()" title="Fit Diagram to Viewport"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg> <span>Fit</span></button>
+            <button class="panel-icon-btn" style="padding:3px 8px;font-size:11px;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;" onclick="studioExportSvg()" title="Export Diagram as SVG"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span>SVG</span></button>
           </div>
         </div>
         <div id="studioBpmnContainer" style="flex:1;width:100%;height:100%;min-height:500px;"></div>
         <div id="studioSyncBar" style="position:absolute;bottom:12px;left:14px;right:14px;background:rgba(15,23,42,0.92);color:#fff;padding:7px 14px;border-radius:8px;font-size:11.5px;display:flex;align-items:center;justify-content:space-between;backdrop-filter:blur(6px);pointer-events:none;z-index:25;box-shadow:0 4px 16px rgba(0,0,0,0.2);">
-          <span id="studioSyncStatusText">⚡ Bidirectional Sync Active — Click any task or gateway in BPMN to inspect PRD</span>
+          <span id="studioSyncStatusText" style="display:inline-flex;align-items:center;gap:6px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> <span id="studioSyncMsg">Bidirectional Sync Active — Click any task or gateway in BPMN to inspect PRD</span></span>
         </div>
       </div>
     </div>
