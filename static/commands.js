@@ -2205,13 +2205,83 @@ function ensureSkillCommandsLoadedForAutocomplete(){
 // ── Autocomplete dropdown ───────────────────────────────────────────────────
 
 const COUNCIL_ROLES = [
-  { name: 'lead', tag: '@lead', role: '💎 Diamond', desc: 'Lead Decider & Strategy (Orkestrator Tim)', aliases: ['diamond'] },
-  { name: 'scope', tag: '@scope', role: '⚖️ Onyx', desc: 'Scope & SOW Shield (Proteksi Kontrak & CR Guard)', aliases: ['kontrak', 'onyx'] },
-  { name: 'tech', tag: '@tech', role: '🔴 Ruby', desc: 'Tech Lead (API, DB Schema & Backend)', aliases: ['backend', 'ruby'] },
-  { name: 'ops', tag: '@ops', role: '🔷 Sapphire', desc: 'Domain & Ops Specialist (SOP Lapangan)', aliases: ['bisnis', 'sapphire'] },
-  { name: 'qa', tag: '@qa', role: '🔶 Amber', desc: 'QA & Risk (Batas Validasi, Gherkin, UAT)', aliases: ['test', 'amber'] },
-  { name: 'ux', tag: '@ux', role: '🟢 Emerald', desc: 'UX Lead (User Journey & Figma Handoff)', aliases: ['design', 'emerald'] },
-  { name: 'klien', tag: '@klien', role: '🏛️ Obsidian', desc: 'Demanding Client Persona (Sparring Kritis)', aliases: ['client', 'obsidian'] }
+  {
+    name: 'lead',
+    tag: '@lead',
+    gem: 'Diamond',
+    role: 'Lead Decider & Strategy',
+    color: '#06b6d4',
+    bg: 'rgba(6, 182, 212, 0.12)',
+    desc: 'Pengambil keputusan utama & orkestrator tim multi-agent',
+    aliases: ['diamond'],
+    iconSvg: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 7-10 11L2 10l4-7z"/><path d="M2 10h20"/><path d="M12 21L7.5 10 10 3"/><path d="M12 21l4.5-11L14 3"/></svg>`
+  },
+  {
+    name: 'scope',
+    tag: '@scope',
+    gem: 'Onyx',
+    role: 'Scope & SOW Shield',
+    color: '#a855f7',
+    bg: 'rgba(168, 85, 247, 0.12)',
+    desc: 'Proteksi ruang lingkup kontrak, audit KAK & pembendung CR liar',
+    aliases: ['kontrak', 'onyx'],
+    iconSvg: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L3 7v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V7l-9-5z"/><path d="M12 2v21"/><path d="M3 13l9 3 9-3"/></svg>`
+  },
+  {
+    name: 'tech',
+    tag: '@tech',
+    gem: 'Ruby',
+    role: 'Tech Lead Architecture',
+    color: '#f43f5e',
+    bg: 'rgba(244, 63, 94, 0.12)',
+    desc: 'Arsitektur API, Functional Data Matrix, skema DB & kelayakan teknis',
+    aliases: ['backend', 'ruby'],
+    iconSvg: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4.5v11L12 22l-8-4.5v-11L12 2z"/><path d="M12 2v20"/><path d="M4 6.5l8 4.5 8-4.5"/><path d="M4 17.5l8-4.5 8 4.5"/></svg>`
+  },
+  {
+    name: 'ops',
+    tag: '@ops',
+    gem: 'Sapphire',
+    role: 'Domain & Ops Specialist',
+    color: '#3b82f6',
+    bg: 'rgba(59, 130, 246, 0.12)',
+    desc: 'SOP lapangan, validasi proses bisnis industri & alur Camunda BPMN',
+    aliases: ['bisnis', 'sapphire'],
+    iconSvg: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="7,2 17,2 22,7 22,17 17,22 7,22 2,17 2,7"/><rect x="7" y="7" width="10" height="10" rx="1"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="22" y1="7" x2="17" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="22" y1="17" x2="17" y2="17"/></svg>`
+  },
+  {
+    name: 'qa',
+    tag: '@qa',
+    gem: 'Amber',
+    role: 'QA & Risk Specialist',
+    color: '#f59e0b',
+    bg: 'rgba(245, 158, 11, 0.12)',
+    desc: 'Validasi batas ekstrem, skenario pengujian Gherkin AC & UAT',
+    aliases: ['test', 'amber'],
+    iconSvg: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 12l10 10 10-10L12 2z"/><path d="M12 2v20"/><path d="M2 12h20"/><circle cx="12" cy="12" r="3.5" stroke="#f59e0b" stroke-width="1.5"/></svg>`
+  },
+  {
+    name: 'ux',
+    tag: '@ux',
+    gem: 'Emerald',
+    role: 'UX & Journey Lead',
+    color: '#10b981',
+    bg: 'rgba(16, 185, 129, 0.12)',
+    desc: 'Perancang alur interaksi pengguna, wireframe & handoff Figma',
+    aliases: ['design', 'emerald'],
+    iconSvg: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="6,3 18,3 21,7 21,17 18,21 6,21 3,17 3,7"/><rect x="6.5" y="6.5" width="11" height="11"/><line x1="3" y1="7" x2="6.5" y2="6.5"/><line x1="21" y1="7" x2="17.5" y2="6.5"/><line x1="3" y1="17" x2="6.5" y2="17.5"/><line x1="21" y1="17" x2="17.5" y2="17.5"/></svg>`
+  },
+  {
+    name: 'klien',
+    tag: '@klien',
+    gem: 'Obsidian',
+    role: 'Client Persona (Demanding)',
+    color: '#94a3b8',
+    bg: 'rgba(148, 163, 184, 0.12)',
+    desc: 'Simulasi stakeholder birokrat/kritis untuk sparring presentasi',
+    aliases: ['client', 'obsidian'],
+    iconSvg: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12,2 20,8 16,22 8,22 4,8"/><line x1="12" y1="2" x2="12" y2="22"/><line x1="4" y1="8" x2="20" y2="8"/><line x1="12" y1="8" x2="16" y2="22"/><line x1="12" y1="8" x2="8" y2="22"/></svg>`
+  }
 ];
 
 function getCouncilMentionMatches(text, cursor){
@@ -2227,6 +2297,7 @@ function getCouncilMentionMatches(text, cursor){
   const filtered = COUNCIL_ROLES.filter(r => {
     if(!query) return true;
     return r.name.toLowerCase().includes(query) ||
+           r.gem.toLowerCase().includes(query) ||
            r.role.toLowerCase().includes(query) ||
            r.aliases.some(a => a.toLowerCase().includes(query));
   });
@@ -2234,8 +2305,12 @@ function getCouncilMentionMatches(text, cursor){
   return filtered.map(r => ({
     source: 'council',
     tag: r.tag,
+    gem: r.gem,
     role: r.role,
+    color: r.color,
+    bg: r.bg,
     desc: r.desc,
+    iconSvg: r.iconSvg,
     tokenStart,
     tokenEnd
   }));
@@ -2259,8 +2334,9 @@ function showCmdDropdown(matches){
 
     if(c.source==='council'){
       el.classList.add('cmd-item-council');
-      const nameHtml=`<div class="cmd-item-head"><span class="cmd-item-council-tag">${esc(c.tag)}</span> <span class="cmd-item-council-role">${esc(c.role)}</span></div>`;
-      const descHtml=`<div class="cmd-item-desc">${esc(c.desc)}</div>`;
+      const iconWrap = `<div class="cmd-item-gem-icon" style="width:24px;height:24px;border-radius:6px;background:${c.bg};display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid ${c.color}33;">${c.iconSvg}</div>`;
+      const nameHtml=`<div class="cmd-item-head" style="display:flex;align-items:center;gap:10px;"><div style="display:flex;align-items:center;gap:8px;">${iconWrap}<span class="cmd-item-council-tag" style="color:${c.color};font-weight:700;font-size:12.5px;">${esc(c.tag)}</span><span class="cmd-item-council-role" style="font-weight:600;font-size:12px;color:var(--text);">${esc(c.gem)} &middot; ${esc(c.role)}</span></div></div>`;
+      const descHtml=`<div class="cmd-item-desc" style="margin-left:34px;font-size:11px;color:var(--muted);">${esc(c.desc)}</div>`;
       el.innerHTML=`${nameHtml}${descHtml}`;
       el.onmousedown=(e)=>{
         e.preventDefault();
