@@ -2865,3 +2865,23 @@ window.submitPrdDiscussion = submitPrdDiscussion;
 window.applyPrdRevision = applyPrdRevision;
 window.jumpToCouncilChatWithContext = jumpToCouncilChatWithContext;
 
+function insertCouncilRole(tag){
+  const textarea = document.getElementById('msg');
+  if(!textarea) return;
+  const current = textarea.value || '';
+  if(current.startsWith(tag + ' ')){
+    textarea.focus();
+    return;
+  }
+  const roleRe = /^@(?:lead|diamond|scope|kontrak|tech|backend|ops|bisnis|qa|test|ux|design|klien|client)\s*/i;
+  if(roleRe.test(current)){
+    textarea.value = current.replace(roleRe, tag + ' ');
+  } else {
+    textarea.value = tag + ' ' + current;
+  }
+  textarea.focus();
+  if(typeof autoResizeComposer === 'function') autoResizeComposer();
+}
+window.insertCouncilRole = insertCouncilRole;
+
+
