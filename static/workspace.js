@@ -1190,8 +1190,13 @@ function loadBpmnViewerLibrary(){
     linkBpmn.href = 'https://cdn.jsdelivr.net/npm/bpmn-js@17/dist/assets/bpmn-js.css';
     document.head.appendChild(linkBpmn);
 
+    const linkFont = document.createElement('link');
+    linkFont.rel = 'stylesheet';
+    linkFont.href = 'https://cdn.jsdelivr.net/npm/bpmn-js@17/dist/assets/bpmn-font/css/bpmn.css';
+    document.head.appendChild(linkFont);
+
     const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/bpmn-js@17/dist/bpmn-navigated-viewer.production.min.js';
+    script.src = 'https://cdn.jsdelivr.net/npm/bpmn-js@17/dist/bpmn-modeler.production.min.js';
     script.crossOrigin = 'anonymous';
     script.onload = () => resolve();
     script.onerror = (err) => {
@@ -1217,7 +1222,10 @@ async function renderBpmnPreviewContent(path, xml){
     _destroyBpmnViewer();
 
     _bpmnViewerInstance = new window.BpmnJS({
-      container: canvasEl
+      container: canvasEl,
+      keyboard: {
+        bindTo: document
+      }
     });
     await _bpmnViewerInstance.importXML(xml);
     const canvas = _bpmnViewerInstance.get('canvas');
@@ -1229,6 +1237,35 @@ async function renderBpmnPreviewContent(path, xml){
     if(typeof showToast==='function'){
       showToast('Visual BPMN preview failed. Displaying raw XML.', 3000, 'warning');
     }
+  }
+}
+
+async function bpmnSaveDiagram(){
+  if(!_bpmnViewerInstance || !_previewCurrentPath) return;
+  const saveBtn = $('btnBpmnSave');
+  const oldText = saveBtn ? saveBtn.innerHTML : '';
+  try {
+    if(saveBtn) saveBtn.innerHTML = '⏳ Saving...';
+    const { xml } = await _bpmnViewerInstance.saveXML({ format: true });
+    await api('/api/file/save', {
+      method: 'POST',
+      body: JSON.stringify({
+        session_id: S.session ? S.session.session_id : '',
+        path: _previewCurrentPath,
+        content: xml
+      })
+    });
+    _previewRawContent = xml;
+    if(typeof showToast === 'function'){
+      showToast('BPMN Diagram berhasil disimpan ke server! 💾', 3000);
+    }
+  } catch(e) {
+    console.error('Save BPMN failed:', e);
+    if(typeof showToast === 'function'){
+      showToast('Gagal menyimpan BPMN: ' + e.message, 4000, 'error');
+    }
+  } finally {
+    if(saveBtn) saveBtn.innerHTML = oldText || '💾 Save BPMN';
   }
 }
 
@@ -2027,33 +2064,9 @@ const STUDIO_ARTIFACTS_DATA = {
 };
 
 function switchAppMode(mode){
-  const validMode = (mode === 'studio') ? 'studio' : 'chat';
-  document.documentElement.dataset.appMode = validMode;
-
-  const btnChat = $('btnAppModeChat');
-  const btnStudio = $('btnAppModeStudio');
-  const railStudio = $('railBtnStudio');
-  const navStudio = $('sidebarNavStudio');
-
-  if(btnChat && btnStudio){
-    if(validMode === 'studio'){
-      btnChat.style.background = 'transparent';
-      btnChat.style.color = 'var(--text)';
-      btnStudio.style.background = 'var(--blue)';
-      btnStudio.style.color = '#fff';
-    } else {
-      btnChat.style.background = 'var(--blue)';
-      btnChat.style.color = '#fff';
-      btnStudio.style.background = 'transparent';
-      btnStudio.style.color = 'var(--text)';
-    }
-  }
-
-  if(railStudio) railStudio.classList.toggle('active', validMode === 'studio');
-  if(navStudio) navStudio.classList.toggle('active', validMode === 'studio');
-
-  if(validMode === 'studio'){
-    initProductStudio();
+  const target = (mode === 'studio') ? 'studio' : 'chat';
+  if(typeof switchPanel === 'function'){
+    switchPanel(target);
   }
 }
 
@@ -2073,6 +2086,12 @@ async function initProductStudio(){
   }
 
   await loadStudioPrd(_studioCurrentPrdPath);
+  if(!_studioBpmnViewerInstance){
+    await loadStudioBpmn(_studioCurrentBpmnPath);
+  }
+
+  const savedLayout = localStorage.getItem('hermes-studio-layout') || 'prd';
+  setStudioLayout(savedLayout);
 }
 
 function renderStudioArtifactTree(){
@@ -2117,7 +2136,7 @@ async function loadStudioPrd(prdPath){
   if(!viewerEl) return;
 
   if(titleEl){
-    titleEl.textContent = '📄 ' + (prdPath.split('/').pop() || 'PRD Specification');
+    titleEl.textContent = prdPath.split('/').pop() || 'PRD Specification';
     titleEl.title = prdPath;
   }
 
@@ -2128,13 +2147,15 @@ async function loadStudioPrd(prdPath){
     const data = await api(_workspaceRouteForPath(prdPath, 'read'));
     _studioPrdRawText = data.content || '';
     viewerEl.innerHTML = renderMd(_studioPrdRawText);
+    _enhancePrdView(viewerEl);
     _attachStudioPrdListeners(viewerEl);
+    _buildPrdTableOfContents(viewerEl);
   }catch(err){
     viewerEl.innerHTML = '<div style="color:var(--red);padding:20px">Failed to load PRD: ' + err.message + '</div>';
   }
 
   const matchingFlow = WORKBENCH_PAIR_MAP[prdPath];
-  if(matchingFlow && matchingFlow !== _studioCurrentBpmnPath){
+  if(matchingFlow && (matchingFlow !== _studioCurrentBpmnPath || !_studioBpmnViewerInstance)){
     await loadStudioBpmn(matchingFlow);
     const flowSelect = $('studioActiveFlowSelect');
     if(flowSelect) flowSelect.value = matchingFlow;
@@ -2160,11 +2181,20 @@ async function loadStudioBpmn(bpmnPath){
     const xml = data.content || '';
 
     _studioBpmnViewerInstance = new window.BpmnJS({
-      container: canvasEl
+      container: canvasEl,
+      keyboard: {
+        bindTo: document
+      }
     });
     await _studioBpmnViewerInstance.importXML(xml);
-    const canvas = _studioBpmnViewerInstance.get('canvas');
-    canvas.zoom('fit-viewport');
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        try {
+          const canvas = _studioBpmnViewerInstance.get('canvas');
+          canvas.zoom('fit-viewport');
+        } catch(_) {}
+      }, 100);
+    });
 
     const eventBus = _studioBpmnViewerInstance.get('eventBus');
     eventBus.on('element.click', function(e){
@@ -2230,6 +2260,222 @@ function _attachStudioPrdListeners(container){
       syncStudioPrdClickToBpmn(item.textContent);
     });
   });
+
+  container.addEventListener('mouseup', _handlePrdTextSelection);
+  container.addEventListener('keyup', _handlePrdTextSelection);
+}
+
+let _currentSelectedPrdText = '';
+function _handlePrdTextSelection(){
+  const sel = window.getSelection();
+  const text = sel ? sel.toString().trim() : '';
+  const badge = $('prdHighlightDiscussBadge');
+  if(!badge) return;
+
+  if(text && text.length >= 4){
+    _currentSelectedPrdText = text;
+    try {
+      const range = sel.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      const studioView = $('productStudioView');
+      const studioRect = studioView.getBoundingClientRect();
+
+      const top = Math.max(10, rect.top - studioRect.top - 36);
+      const left = Math.max(10, rect.left - studioRect.left + (rect.width / 2) - 75);
+
+      badge.style.top = top + 'px';
+      badge.style.left = left + 'px';
+      badge.style.display = 'inline-flex';
+    } catch(_) {
+      badge.style.display = 'none';
+    }
+  } else {
+    setTimeout(() => {
+      const activeSel = window.getSelection();
+      if(!activeSel || !activeSel.toString().trim()){
+        badge.style.display = 'none';
+      }
+    }, 250);
+  }
+}
+
+function setStudioLayout(layout){
+  const valid = ['prd', 'split', 'flow'].includes(layout) ? layout : 'prd';
+  const studioView = $('mainStudio') || $('productStudioView');
+  if(!studioView) return;
+  studioView.setAttribute('data-studio-layout', valid);
+  localStorage.setItem('hermes-studio-layout', valid);
+
+  const bPrd = $('btnLayoutPrd');
+  const bSplit = $('btnLayoutSplit');
+  const bFlow = $('btnLayoutFlow');
+  if(bPrd) bPrd.classList.toggle('active', valid === 'prd');
+  if(bSplit) bSplit.classList.toggle('active', valid === 'split');
+  if(bFlow) bFlow.classList.toggle('active', valid === 'flow');
+
+  if(valid === 'flow' || valid === 'split'){
+    setTimeout(() => {
+      studioFitBpmn();
+    }, 150);
+  }
+}
+
+function toggleStudioPrdDiscussion(){
+  const drawer = $('studioPrdDiscussDrawer');
+  if(!drawer) return;
+  const isHidden = (drawer.style.display === 'none');
+  drawer.style.display = isHidden ? 'flex' : 'none';
+  if(isHidden){
+    const sel = window.getSelection();
+    const text = sel ? sel.toString().trim() : '';
+    if(text) _currentSelectedPrdText = text;
+    const contextBox = $('discussSelectedContextBox');
+    const textEl = $('discussSelectedText');
+    if(_currentSelectedPrdText){
+      if(contextBox) contextBox.style.display = 'block';
+      if(textEl) textEl.textContent = `"${_currentSelectedPrdText.slice(0, 300)}${_currentSelectedPrdText.length > 300 ? '...' : ''}"`;
+    } else {
+      if(contextBox) contextBox.style.display = 'none';
+    }
+    setTimeout(() => $('discussInputPrompt')?.focus(), 50);
+  }
+}
+
+function closeStudioPrdDiscussion(){
+  const drawer = $('studioPrdDiscussDrawer');
+  if(drawer) drawer.style.display = 'none';
+}
+
+function openStudioPrdDiscussionFromHighlight(){
+  const drawer = $('studioPrdDiscussDrawer');
+  const contextBox = $('discussSelectedContextBox');
+  const textEl = $('discussSelectedText');
+  const badge = $('prdHighlightDiscussBadge');
+  if(badge) badge.style.display = 'none';
+  if(!drawer) return;
+
+  drawer.style.display = 'flex';
+  if(_currentSelectedPrdText){
+    if(contextBox) contextBox.style.display = 'block';
+    if(textEl) textEl.textContent = `"${_currentSelectedPrdText.slice(0, 300)}${_currentSelectedPrdText.length > 300 ? '...' : ''}"`;
+  }
+  const input = $('discussInputPrompt');
+  if(input){
+    input.focus();
+  }
+}
+
+function jumpToCouncilChatWithContext(){
+  const promptInput = $('discussInputPrompt');
+  const userPrompt = promptInput ? promptInput.value.trim() : '';
+  const selectedText = _currentSelectedPrdText || '';
+  const prdFile = (_studioCurrentPrdPath || '').split('/').pop() || 'PRD Document';
+
+  const fullPrompt = `[DISKUSI IN-LINE PRD: ${prdFile}]\n` +
+    (selectedText ? `[Klausul yang disorot]: "${selectedText}"\n` : '') +
+    (userPrompt ? `[Catatan]: ${userPrompt}\n` : '') +
+    `Mohon review klausul ini bersama Gemstone Council.`;
+
+  const chatMsgInput = $('msg');
+  if(chatMsgInput) {
+    chatMsgInput.value = fullPrompt;
+  }
+  switchAppMode('chat');
+  setTimeout(() => {
+    chatMsgInput?.focus();
+  }, 100);
+}
+
+let _lastRevisionProposal = '';
+async function submitPrdDiscussion(){
+  const promptInput = $('discussInputPrompt');
+  const prompt = promptInput ? promptInput.value.trim() : '';
+  if(!prompt) return;
+
+  const role = $('discussRoleSelect')?.value || 'council';
+  const roleNameMap = {
+    council: 'Gemstone Council (Diamond, Sapphire, Ruby, Amber)',
+    diamond: '💎 Diamond (Lead Decider)',
+    sapphire: '🔷 Sapphire (Operasional & DMS Specialist)',
+    ruby: '🔴 Ruby (Arsitektur ERP & Technical Lead)',
+    amber: '🔶 Amber (QA & Edge Case Specialist)'
+  };
+
+  const selectedText = _currentSelectedPrdText || '';
+  const prdFile = (_studioCurrentPrdPath || '').split('/').pop() || 'PRD Document';
+
+  const fullPrompt = `[DISKUSI IN-LINE PRD: ${prdFile}]\n` +
+    (selectedText ? `[Klausul yang disorot]: "${selectedText}"\n` : '') +
+    `[Fokus Review]: ${roleNameMap[role] || role}\n` +
+    `[Masukan/Catatan User]: ${prompt}\n\n` +
+    `Mohon tanggapi langsung poin di atas, berikan analisis singkat dan rekomendasi perbaikan klausul dokumen. Sertakan blok "USULAN REVISI KLAUSUL:" yang siap diterapkan langsung ke PRD.`;
+
+  const resultBox = $('discussResultBox');
+  const resultContent = $('discussResultContent');
+  const labelSubmit = $('labelSubmitDiscuss');
+  if(resultBox) resultBox.style.display = 'block';
+  if(resultContent) resultContent.innerHTML = '<div style="color:var(--muted);font-style:italic;">⏳ Mengirim konteks ke Hermes...</div>';
+  if(labelSubmit) labelSubmit.textContent = '...';
+
+  try {
+    const chatMsgInput = $('msg');
+    if(chatMsgInput && typeof send === 'function'){
+      chatMsgInput.value = fullPrompt;
+      await send();
+      if(resultContent){
+        resultContent.innerHTML = `<div style="color:var(--text);line-height:1.6;">
+          <strong>✅ Diskusi klausul telah dikirim ke Hermes.</strong><br><br>
+          Hermes sedang memproses jawaban & usulan revisi. Anda dapat membuka obrolan langsung di 
+          <a href="javascript:void(0)" onclick="switchAppMode('chat')" style="color:var(--blue);font-weight:600;text-decoration:underline;">Council Chat</a> 
+          atau tetap di PRD ini.
+        </div>`;
+      }
+      if(typeof showToast === 'function'){
+        showToast('Klausul terkirim ke Hermes! 💬', 2500);
+      }
+    } else {
+      if(resultContent){
+        resultContent.innerHTML = '<div style="color:var(--muted);">Sesi belum aktif. Silakan buka chat terlebih dahulu.</div>';
+      }
+    }
+  } catch(err) {
+    console.error('Submit PRD discussion failed:', err);
+    if(resultContent) resultContent.innerHTML = '<div style="color:var(--red);">Gagal mengirim diskusi: ' + err.message + '</div>';
+  } finally {
+    if(labelSubmit) labelSubmit.textContent = 'Kirim';
+  }
+}
+
+async function applyPrdRevision(){
+  if(!_lastRevisionProposal || !_studioCurrentPrdPath || !_currentSelectedPrdText){
+    showToast('Pilih klausul dan tunggu usulan revisi dari Hermes.', 2500, 'warning');
+    return;
+  }
+  if(!_studioPrdRawText.includes(_currentSelectedPrdText)){
+    showToast('Teks asli tidak ditemukan persis di dokumen.', 3000, 'warning');
+    return;
+  }
+  const updatedText = _studioPrdRawText.replace(_currentSelectedPrdText, _lastRevisionProposal);
+  try {
+    await api('/api/file/save', {
+      method: 'POST',
+      body: JSON.stringify({
+        session_id: S.session ? S.session.session_id : '',
+        path: _studioCurrentPrdPath,
+        content: updatedText
+      })
+    });
+    _studioPrdRawText = updatedText;
+    const viewer = $('studioPrdViewer');
+    if(viewer){
+      viewer.innerHTML = renderMd(_studioPrdRawText);
+      _attachStudioPrdListeners(viewer);
+    }
+    showToast('Revisi berhasil diterapkan ke PRD! 💾', 3000);
+    closeStudioPrdDiscussion();
+  } catch(e) {
+    showToast('Gagal menerapkan revisi: ' + e.message, 3500, 'error');
+  }
 }
 
 function syncStudioPrdClickToBpmn(text){
@@ -2338,19 +2584,256 @@ document.addEventListener('keydown', function(e){
 
   if((e.altKey && (e.key === 's' || e.key === 'S')) || (e.ctrlKey && e.shiftKey && (e.key === 'p' || e.key === 'P'))){
     e.preventDefault();
-    const currentMode = document.documentElement.dataset.appMode || 'chat';
-    switchAppMode(currentMode === 'studio' ? 'chat' : 'studio');
+    if(typeof switchPanel === 'function'){
+      const activeTab = document.querySelector('.rail-btn.active')?.dataset?.panel;
+      switchPanel(activeTab === 'studio' ? 'chat' : 'studio');
+    }
     return;
-  }
-  if(e.key === 'Escape' && document.documentElement.dataset.appMode === 'studio'){
-    switchAppMode('chat');
-    return;
-  }
-  if(!isTyping && e.key === '[' && document.documentElement.dataset.appMode === 'studio'){
-    e.preventDefault();
-    toggleStudioNav();
   }
 });
+
+async function studioSaveBpmn(){
+  if(!_studioBpmnViewerInstance || !_studioCurrentBpmnPath) return;
+  const saveBtn = $('btnStudioSaveBpmn');
+  const oldHtml = saveBtn ? saveBtn.innerHTML : '';
+  try {
+    if(saveBtn) saveBtn.innerHTML = '<span>Saving...</span>';
+    const { xml } = await _studioBpmnViewerInstance.saveXML({ format: true });
+    await api('/api/file/save', {
+      method: 'POST',
+      body: JSON.stringify({
+        session_id: S.session ? S.session.session_id : '',
+        path: _studioCurrentBpmnPath,
+        content: xml,
+        sync_gdrive: true
+      })
+    });
+    if(typeof showToast === 'function'){
+      showToast('BPMN Flow disimpan & disinkronkan ke Google Drive! 💾☁️', 3500);
+    }
+  } catch(e) {
+    console.error('Save studio BPMN failed:', e);
+    if(typeof showToast === 'function'){
+      showToast('Gagal menyimpan flow: ' + e.message, 4000, 'error');
+    }
+  } finally {
+    if(saveBtn) saveBtn.innerHTML = oldHtml || '<span>Save</span>';
+  }
+}
+
+let _studioPrdEditing = false;
+function toggleStudioPrdEdit(){
+  const viewer = $('studioPrdViewer');
+  const editorWrap = $('studioPrdEditorWrap');
+  const editArea = $('studioPrdEditArea');
+  const editLabel = $('studioEditBtnLabel');
+  const saveBtn = $('btnStudioSavePrd');
+  if(!viewer || !editorWrap || !editArea) return;
+
+  _studioPrdEditing = !_studioPrdEditing;
+  if(_studioPrdEditing){
+    editArea.value = _studioPrdRawText || '';
+    viewer.style.display = 'none';
+    editorWrap.style.display = 'flex';
+    if(editLabel) editLabel.textContent = 'Preview';
+    if(saveBtn) saveBtn.style.display = 'inline-flex';
+    editArea.focus();
+  } else {
+    _studioPrdRawText = editArea.value;
+    viewer.innerHTML = renderMd(_studioPrdRawText);
+    _enhancePrdView(viewer);
+    _attachStudioPrdListeners(viewer);
+    _buildPrdTableOfContents(viewer);
+    editorWrap.style.display = 'none';
+    viewer.style.display = 'block';
+    if(editLabel) editLabel.textContent = 'Edit';
+    if(saveBtn) saveBtn.style.display = 'none';
+  }
+}
+
+async function saveStudioPrdEdit(){
+  const editArea = $('studioPrdEditArea');
+  const saveBtn = $('btnStudioSavePrd');
+  if(!_studioCurrentPrdPath || !editArea) return;
+  const oldHtml = saveBtn ? saveBtn.innerHTML : '';
+  try {
+    if(saveBtn) saveBtn.innerHTML = '<span>Saving...</span>';
+    const content = editArea.value;
+    await api('/api/file/save', {
+      method: 'POST',
+      body: JSON.stringify({
+        session_id: S.session ? S.session.session_id : '',
+        path: _studioCurrentPrdPath,
+        content: content,
+        sync_gdrive: true
+      })
+    });
+    _studioPrdRawText = content;
+    const viewer = $('studioPrdViewer');
+    if(viewer) {
+      viewer.innerHTML = renderMd(_studioPrdRawText);
+      _enhancePrdView(viewer);
+      _attachStudioPrdListeners(viewer);
+      _buildPrdTableOfContents(viewer);
+    }
+    if(typeof showToast === 'function'){
+      showToast('PRD Specification disimpan & disinkronkan ke Google Drive! 💾☁️', 3500);
+    }
+  } catch(e) {
+    console.error('Failed to save PRD:', e);
+    if(typeof showToast === 'function'){
+      showToast('Gagal menyimpan PRD: ' + e.message, 4000, 'error');
+    }
+  } finally {
+    if(saveBtn) saveBtn.innerHTML = oldHtml || '<span>Save</span>';
+  }
+}
+
+function exportPrdToPdf(){
+  window.print();
+}
+
+function toggleStudioPrdOutline(){
+  const outline = $('studioPrdOutline');
+  const btn = $('btnTogglePrdOutline');
+  if(!outline) return;
+  const isCollapsed = outline.classList.toggle('collapsed');
+  localStorage.setItem('hermes-studio-outline-collapsed', isCollapsed ? '1' : '0');
+  if(btn) btn.classList.toggle('active', !isCollapsed);
+}
+
+function scrollToPrdHeading(secId){
+  const heading = document.getElementById(secId);
+  if(!heading) return;
+  heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  const outlineList = $('studioPrdOutlineList');
+  if(outlineList){
+    outlineList.querySelectorAll('.prd-toc-item').forEach(item => {
+      item.classList.toggle('active', item.getAttribute('data-sec-id') === secId);
+    });
+  }
+}
+
+function _buildPrdTableOfContents(viewerEl){
+  const outlineList = $('studioPrdOutlineList');
+  const outlineCount = $('prdOutlineCount');
+  const outline = $('studioPrdOutline');
+  const btn = $('btnTogglePrdOutline');
+  if(!outlineList || !viewerEl) return;
+
+  const isCollapsed = localStorage.getItem('hermes-studio-outline-collapsed') === '1';
+  if(outline) outline.classList.toggle('collapsed', isCollapsed);
+  if(btn) btn.classList.toggle('active', !isCollapsed);
+
+  const headings = viewerEl.querySelectorAll('h1, h2, h3, h4');
+  if(!headings || headings.length === 0){
+    outlineList.innerHTML = '<div style="color:var(--muted);font-size:11.5px;padding:12px 8px;text-align:center;">Tidak ada heading</div>';
+    if(outlineCount) outlineCount.textContent = '0';
+    return;
+  }
+
+  if(outlineCount) outlineCount.textContent = headings.length + ' sections';
+
+  let html = '';
+  headings.forEach((h, idx) => {
+    const secId = 'prd-sec-' + idx;
+    h.id = secId;
+    const tagName = h.tagName.toLowerCase();
+    const level = tagName === 'h1' ? 1 : (tagName === 'h2' ? 2 : (tagName === 'h3' ? 3 : 4));
+    const titleText = (h.textContent || '').trim();
+    html += '<a class="prd-toc-item toc-level-' + level + '" data-sec-id="' + secId + '" href="javascript:void(0)" onclick="scrollToPrdHeading(\'' + secId + '\')" title="' + titleText.replace(/"/g, '&quot;') + '">' + titleText + '</a>';
+  });
+  outlineList.innerHTML = html;
+
+  if(viewerEl._tocScrollHandler){
+    viewerEl.removeEventListener('scroll', viewerEl._tocScrollHandler);
+  }
+
+  viewerEl._tocScrollHandler = () => {
+    const viewerRect = viewerEl.getBoundingClientRect();
+    let currentActiveId = null;
+    headings.forEach(h => {
+      const r = h.getBoundingClientRect();
+      if(r.top - viewerRect.top <= 120){
+        currentActiveId = h.id;
+      }
+    });
+    if(!currentActiveId && headings.length > 0){
+      currentActiveId = headings[0].id;
+    }
+    if(currentActiveId){
+      outlineList.querySelectorAll('.prd-toc-item').forEach(item => {
+        item.classList.toggle('active', item.getAttribute('data-sec-id') === currentActiveId);
+      });
+    }
+  };
+  viewerEl.addEventListener('scroll', viewerEl._tocScrollHandler, { passive: true });
+}
+
+function _enhancePrdView(viewerEl){
+  if(!viewerEl) return;
+
+  // 1. Wrap tables in responsive card wrappers
+  const tables = viewerEl.querySelectorAll('table');
+  tables.forEach(tbl => {
+    if(!tbl.parentElement.classList.contains('prd-table-wrapper')){
+      const wrap = document.createElement('div');
+      wrap.className = 'prd-table-wrapper';
+      tbl.parentNode.insertBefore(wrap, tbl);
+      wrap.appendChild(tbl);
+    }
+  });
+
+  // 2. Identify column headers and enhance data matrix cells
+  tables.forEach(tbl => {
+    const ths = Array.from(tbl.querySelectorAll('thead th, tr:first-child th'));
+    const fieldColIdx = ths.findIndex(th => /field|nama field|nama kolom|atribut/i.test(th.textContent.trim()));
+    const typeColIdx = ths.findIndex(th => /data type|tipe data|tipe/i.test(th.textContent.trim()));
+
+    const rows = tbl.querySelectorAll('tbody tr, tr:not(:first-child)');
+    rows.forEach(tr => {
+      const tds = tr.querySelectorAll('td');
+      tds.forEach((td, colIdx) => {
+        const text = (td.textContent || '').trim();
+        const lower = text.toLowerCase();
+
+        // Constraint / Requirement badges
+        if(lower === 'mandatory' || lower === 'wajib' || lower === 'required'){
+          td.innerHTML = '<span class="prd-badge prd-badge-mandatory">Mandatory</span>';
+          return;
+        }
+        if(lower === 'optional' || lower === 'opsional'){
+          td.innerHTML = '<span class="prd-badge prd-badge-optional">Optional</span>';
+          return;
+        }
+        if(lower === 'system generated' || lower === 'system' || lower === 'auto'){
+          td.innerHTML = '<span class="prd-badge prd-badge-system">System Generated</span>';
+          return;
+        }
+        if(lower === 'pk' || lower === 'primary key'){
+          td.innerHTML = '<span class="prd-badge prd-badge-pk">PK</span>';
+          return;
+        }
+        if(lower === 'fk' || lower === 'foreign key'){
+          td.innerHTML = '<span class="prd-badge prd-badge-fk">FK</span>';
+          return;
+        }
+
+        // SQL / Data Types
+        if(colIdx === typeColIdx || /^(varchar(\(\d+\))?|char(\(\d+\))?|text|int|integer|bigint|smallint|decimal(\(\d+,\s*\d+\))?|numeric|boolean|date|datetime|timestamp|time|uuid|json|jsonb|serial|float|double)$/i.test(text)){
+          td.innerHTML = '<code class="prd-datatype">' + text + '</code>';
+          return;
+        }
+
+        // Field Names in Field column
+        if(colIdx === fieldColIdx && fieldColIdx !== -1 && text && !td.querySelector('code') && !td.querySelector('span.prd-badge')){
+          td.innerHTML = '<code class="prd-fieldname">' + text + '</code>';
+        }
+      });
+    });
+  });
+}
 
 window.switchAppMode = switchAppMode;
 window.initProductStudio = initProductStudio;
@@ -2360,9 +2843,25 @@ window.selectStudioFlowFromTree = selectStudioFlowFromTree;
 window.changeStudioFlow = changeStudioFlow;
 window.studioFitBpmn = studioFitBpmn;
 window.studioExportSvg = studioExportSvg;
+window.studioSaveBpmn = studioSaveBpmn;
+window.toggleStudioPrdEdit = toggleStudioPrdEdit;
+window.saveStudioPrdEdit = saveStudioPrdEdit;
+window.exportPrdToPdf = exportPrdToPdf;
+window.toggleStudioPrdOutline = toggleStudioPrdOutline;
+window.scrollToPrdHeading = scrollToPrdHeading;
+window._buildPrdTableOfContents = _buildPrdTableOfContents;
+window._enhancePrdView = _enhancePrdView;
+window.bpmnSaveDiagram = bpmnSaveDiagram;
 window.openStudioDriveFolder = openStudioDriveFolder;
 window.openStudioPrdDrive = openStudioPrdDrive;
 window.copyStudioPrdMarkdown = copyStudioPrdMarkdown;
 window.refreshStudioArtifacts = refreshStudioArtifacts;
 window.toggleStudioNav = toggleStudioNav;
+window.setStudioLayout = setStudioLayout;
+window.toggleStudioPrdDiscussion = toggleStudioPrdDiscussion;
+window.closeStudioPrdDiscussion = closeStudioPrdDiscussion;
+window.openStudioPrdDiscussionFromHighlight = openStudioPrdDiscussionFromHighlight;
+window.submitPrdDiscussion = submitPrdDiscussion;
+window.applyPrdRevision = applyPrdRevision;
+window.jumpToCouncilChatWithContext = jumpToCouncilChatWithContext;
 

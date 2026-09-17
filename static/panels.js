@@ -43,8 +43,9 @@ const APP_TITLEBAR_KEYS = {
   chat: 'tab_chat', tasks: 'tab_tasks', skills: 'tab_skills',
   memory: 'tab_memory', workspaces: 'tab_workspaces',
   profiles: 'tab_profiles', todos: 'tab_todos', insights: 'tab_insights', logs: 'tab_logs', settings: 'tab_settings',
+  studio: 'tab_studio',
 };
-const MAIN_VIEW_PANELS = ['settings','skills','memory','tasks','kanban','workspaces','profiles','insights','logs','plugin'];
+const MAIN_VIEW_PANELS = ['settings','skills','memory','tasks','kanban','workspaces','profiles','insights','logs','plugin','studio'];
 const MAIN_VIEW_SIDEBAR_PANEL_FALLBACKS = { plugin: 'settings' };
 
 /**
@@ -462,6 +463,7 @@ async function switchPanel(name, opts = {}) {
   if (nextPanel === 'memory') await loadMemory();
   if (nextPanel === 'workspaces') await loadWorkspacesPanel();
   if (nextPanel === 'profiles') await loadProfilesPanel();
+  if (nextPanel === 'studio' && typeof initProductStudio === 'function') await initProductStudio();
   if (nextPanel === 'todos') loadTodos();
   if (nextPanel === 'insights') await loadInsights();
   if (nextPanel === 'logs') await loadLogs();
@@ -7453,8 +7455,11 @@ async function loadMemory(force) {
       : '/api/memory';
     const data = await api(memoryUrl);
     _memoryData = data;
+    if (!_currentMemorySection) {
+      _currentMemorySection = 'memory';
+    }
     if (_currentMemorySection === 'external_notes' && !data.external_notes_enabled) {
-      _currentMemorySection = null;
+      _currentMemorySection = 'memory';
     }
     if (_currentMemorySection === 'external_notes') {
       await loadNotesSources(!!force);

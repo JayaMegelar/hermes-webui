@@ -90,7 +90,7 @@ _CSP_SHARED_POLICY_TEMPLATE = (
     "worker-src blob: 'self' https://cdn.jsdelivr.net; "
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
     "img-src 'self' data: https: blob:; "
-    "font-src 'self' data: https://fonts.gstatic.com; "
+    "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; "
     "media-src 'self' data: blob:; "
     "connect-src {connect_src}; "
     "frame-src {frame_src}; "

@@ -7804,7 +7804,7 @@ function renderMd(raw){
     t=t.replace(/`([^`\n]+)`/g,(_,x)=>{_code_stash.push(`<code>${esc(x)}</code>`);return `\x00C${_code_stash.length-1}\x00`;});
     t=t.replace(/\*\*\*(.+?)\*\*\*/g,(_,x)=>`<strong><em>${esc(x)}</em></strong>`);
     t=t.replace(/\*\*(.+?)\*\*/g,(_,x)=>`<strong>${esc(x)}</strong>`);
-    t=t.replace(/\*([^*\n]+)\*/g,(_,x)=>`<em>${esc(x)}</em>`);
+    t=t.replace(/\*([^\s*](?:[^*\n]*?[^\s*])?)\*/g,(_,x)=>`<em>${esc(x)}</em>`);
     // Strikethrough: ~~text~~ → <del>text</del>
     t=t.replace(/~~(.+?)~~/g,(_,x)=>`<del>${esc(x)}</del>`);
     // #487: Image pass — runs while code stash is active so ![x](url) inside
@@ -7834,7 +7834,7 @@ function renderMd(raw){
   s=s.replace(/(<code\b[^>]*>[\s\S]*?<\/code>)/g,m=>{_ob_stash.push(m);return `\x00O${_ob_stash.length-1}\x00`;});
   s=s.replace(/\*\*\*(.+?)\*\*\*/g,(_,t)=>`<strong><em>${esc(t)}</em></strong>`);
   s=s.replace(/\*\*(.+?)\*\*/g,(_,t)=>`<strong>${esc(t)}</strong>`);
-  s=s.replace(/\*([^*\n]+)\*/g,(_,t)=>`<em>${esc(t)}</em>`);
+  s=s.replace(/\*([^\s*](?:[^*\n]*?[^\s*])?)\*/g,(_,t)=>`<em>${esc(t)}</em>`);
   s=s.replace(/~~(.+?)~~/g,(_,t)=>`<del>${esc(t)}</del>`);
   s=s.replace(/\x00O(\d+)\x00/g,(_,i)=>_ob_stash[+i]);
   s=s.replace(/^###### (.+)$/gm,(_,t)=>`<h6>${inlineMd(t)}</h6>`).replace(/^##### (.+)$/gm,(_,t)=>`<h5>${inlineMd(t)}</h5>`).replace(/^#### (.+)$/gm,(_,t)=>`<h4>${inlineMd(t)}</h4>`).replace(/^### (.+)$/gm,(_,t)=>`<h3>${inlineMd(t)}</h3>`).replace(/^## (.+)$/gm,(_,t)=>`<h2>${inlineMd(t)}</h2>`).replace(/^# (.+)$/gm,(_,t)=>`<h1>${inlineMd(t)}</h1>`);
@@ -8223,6 +8223,29 @@ function renderMd(raw){
 
 function _stripAttachedFilesMarkerForDisplay(text){
   return String(text||'').replace(/\n\n\[Attached files: [^\]]+\]$/,'').trim();
+}
+
+function _cleanContentForDisplay(text, isUser){
+  let s = String(text || '');
+  if(s.startsWith('\x00json:') || s.startsWith('json:[') || s.startsWith('\x00json:[') || s.startsWith('\\x00json:[')){
+    try {
+      const prefixIdx = s.indexOf('[');
+      if(prefixIdx !== -1){
+        const parsed = JSON.parse(s.slice(prefixIdx));
+        if(Array.isArray(parsed)){
+          const textParts = parsed.filter(p => p && p.type === 'text' && p.text).map(p => p.text);
+          if(textParts.length > 0) s = textParts.join('\n');
+        }
+      }
+    } catch(e){}
+  }
+  if(s.includes('data:image/')){
+    s = s.replace(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]{40,}/g, '[Attached Image]');
+  }
+  if(isUser){
+    s = _stripAttachedFilesMarkerForDisplay(_stripWorkspaceDisplayPrefix(s));
+  }
+  return s;
 }
 
 function setStatus(t){
@@ -17182,7 +17205,7 @@ function renderMessages(options){
     if(!isUser&&_isMarkerOnlyAssistantCompressionMessage(m)){
       content='**Error:** No response received after context compression. Please retry.';
     }
-    const displayContent=isUser?_stripAttachedFilesMarkerForDisplay(_stripWorkspaceDisplayPrefix(content)):content;
+    const displayContent=typeof _cleanContentForDisplay==='function'?_cleanContentForDisplay(content, isUser):(isUser?_stripAttachedFilesMarkerForDisplay(_stripWorkspaceDisplayPrefix(content)):content);
     const rowDisplayContent=displayContent;
     if(!isUser&&_isAssistantEmptyPlaceholderContent(m, displayContent)){
       content='';
@@ -19889,6 +19912,55 @@ function _csvMediaUrl(path, opts={}){
   return url;
 }
 
+function _filterCsvTable(input){
+  const q=(input.value||'').toLowerCase().trim();
+  const wrap=input.closest('.csv-table-wrap');
+  if(!wrap) return;
+  const tbody=wrap.querySelector('tbody');
+  if(!tbody) return;
+  const rows=tbody.querySelectorAll('tr');
+  let visible=0;
+  rows.forEach(tr=>{
+    const text=tr.textContent.toLowerCase();
+    const show=!q||text.includes(q);
+    tr.style.display=show?'':'none';
+    if(show) visible++;
+  });
+  const badge=wrap.querySelector('.csv-row-badge');
+  if(badge) badge.textContent=`${visible} of ${rows.length} records`;
+}
+
+function _sortCsvTable(th){
+  const table=th.closest('table');
+  if(!table) return;
+  const tbody=table.querySelector('tbody');
+  if(!tbody) return;
+  const colIndex=Array.from(th.parentNode.children).indexOf(th);
+  const rows=Array.from(tbody.querySelectorAll('tr'));
+  const currentAsc=th.getAttribute('data-sort-asc')==='true';
+  const newAsc=!currentAsc;
+  th.setAttribute('data-sort-asc',String(newAsc));
+
+  th.parentNode.querySelectorAll('th').forEach(h=>{
+    const ic=h.querySelector('.csv-sort-icon');
+    if(ic) ic.textContent='↕';
+  });
+  const icon=th.querySelector('.csv-sort-icon');
+  if(icon) icon.textContent=newAsc?'▲':'▼';
+
+  rows.sort((a,b)=>{
+    const aText=(a.children[colIndex]?.textContent||'').trim();
+    const bText=(b.children[colIndex]?.textContent||'').trim();
+    const aNum=parseFloat(aText.replace(/[^0-9.-]/g,''));
+    const bNum=parseFloat(bText.replace(/[^0-9.-]/g,''));
+    if(!isNaN(aNum)&&!isNaN(bNum)&&!isNaN(Number(aText))&&!isNaN(Number(bText))){
+      return newAsc ? aNum - bNum : bNum - aNum;
+    }
+    return newAsc ? aText.localeCompare(bText) : bText.localeCompare(aText);
+  });
+  rows.forEach(r=>tbody.appendChild(r));
+}
+
 function buildCsvTablePreview(path, text, downloadUrl=''){
   if(typeof text!=='string') return {errorKey:'csv_error'};
   if(text.length>CSV_MAX_SIZE) return {errorKey:'csv_too_large'};
@@ -19903,13 +19975,14 @@ function buildCsvTablePreview(path, text, downloadUrl=''){
   const sep=separators.find(s=>firstLine.includes(s))||',';
   const headers=rows[0].split(sep).map(c=>c.trim().replace(/^["']|["']$/g,''));
   const bodyRows=rows.slice(1).map(r=>'<tr>'+r.split(sep).map(c=>`<td>${esc(c.trim().replace(/^["']|["']$/g,''))}</td>`).join('')+'</tr>').join('');
-  const headerRow=headers.map(h=>`<th>${esc(h)}</th>`).join('');
+  const headerRow=headers.map(h=>`<th style="cursor:pointer;user-select:none;" onclick="_sortCsvTable(this)" title="Click to sort">${esc(h)} <span class="csv-sort-icon" style="opacity:.4;font-size:10px;">↕</span></th>`).join('');
   const fname=path.split('/').pop()||path;
   const downloadLink=downloadUrl
     ? `<a class="csv-download-link msg-media-link" href="${esc(downloadUrl)}" download="${esc(fname)}">📎 ${esc(fname)}</a>`
     : '';
+  const searchBar=`<div class="csv-table-toolbar" style="display:flex;align-items:center;justify-content:space-between;padding:6px 12px;background:var(--sidebar,#f8fafc);border-bottom:1px solid var(--border2,#e2e8f0);font-size:12px;"><input type="text" placeholder="🔍 Search records..." oninput="_filterCsvTable(this)" style="padding:4px 8px;font-size:11.5px;border-radius:4px;border:1px solid var(--border2,#cbd5e1);background:var(--bg,#fff);color:var(--text,#1e293b);width:180px;outline:none;" /><span class="csv-row-badge" style="font-size:11px;color:var(--muted,#64748b);">${rows.length-1} records</span></div>`;
   return {
-    html:`<div class="csv-table-wrap"><div class="pre-header csv-preview-header"><span class="csv-preview-title">${esc(fname)} <span style="opacity:.5;font-size:11px">${t('csv_header_note')}</span></span>${downloadLink}</div><table class="csv-table"><thead><tr>${headerRow}</tr></thead><tbody>${bodyRows}</tbody></table></div>`,
+    html:`<div class="csv-table-wrap"><div class="pre-header csv-preview-header"><span class="csv-preview-title">${esc(fname)} <span style="opacity:.5;font-size:11px">${t('csv_header_note')}</span></span>${downloadLink}</div>${searchBar}<table class="csv-table"><thead><tr>${headerRow}</tr></thead><tbody>${bodyRows}</tbody></table></div>`,
   };
 }
 

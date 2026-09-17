@@ -25385,8 +25385,30 @@ def _handle_file_save(handler, body):
         fd = open_anchored_write_fd(ws_root, target)
         with os.fdopen(fd, "wb", closefd=True) as fh:
             fh.write(data)
+
+        synced_gdrive = False
+        target_str = str(target)
+        if "/hermes_artifacts" in target_str or body.get("sync_gdrive"):
+            def _sync_gdrive_worker(file_path_str):
+                try:
+                    rel = os.path.relpath(file_path_str, "/home/ubuntu/hermes_artifacts")
+                    parent_dir = os.path.dirname(rel)
+                    remote_dest = "gdrive:Hermes_Artifacts" + ("/" + parent_dir if parent_dir and parent_dir != "." else "")
+                    subprocess.run(
+                        ["rclone", "copy", file_path_str, remote_dest],
+                        check=False,
+                        timeout=30,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                except Exception:
+                    pass
+
+            threading.Thread(target=_sync_gdrive_worker, args=(target_str,), daemon=True).start()
+            synced_gdrive = True
+
         return j(
-            handler, {"ok": True, "path": body["path"], "size": len(data)}
+            handler, {"ok": True, "path": body["path"], "size": len(data), "synced_gdrive": synced_gdrive}
         )
     except (ValueError, FileNotFoundError, PermissionError, OSError) as e:
         return bad(handler, _sanitize_error(e))
