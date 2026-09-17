@@ -1385,10 +1385,9 @@
   :root:not(.dark) .chip.model{color:var(--accent-text);border-color:var(--accent-bg-strong);background:var(--accent-bg);}
 .composer-selection-chips{display:flex;flex-direction:column;gap:8px;max-width:clamp(780px,60vw,1100px);width:100%;box-sizing:border-box;margin:0 auto;padding:8px 0 0;min-height:0;max-height:min(32vh,280px);overflow-y:auto;scrollbar-gutter:stable;}
 .composer-selection-chips[hidden]{display:none;}
-.council-pills-bar{display:flex;align-items:center;gap:6px;max-width:clamp(780px,60vw,1100px);width:100%;margin:0 auto 6px;overflow-x:auto;scrollbar-width:none;padding:0 2px;}
-.council-pills-bar::-webkit-scrollbar{display:none;}
-.council-pill-btn{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 9px;font-size:11px;font-weight:500;border-radius:12px;border:1px solid var(--border2);background:var(--surface);color:var(--muted);cursor:pointer;white-space:nowrap;transition:all .15s ease;user-select:none;}
-.council-pill-btn:hover{background:var(--hover);color:var(--text);border-color:var(--blue);transform:translateY(-1px);}
+.cmd-item-council .cmd-item-head{display:flex;align-items:center;gap:8px;}
+.cmd-item-council-tag{color:var(--accent);font-weight:700;font-family:var(--font-mono);font-size:12.5px;}
+.cmd-item-council-role{font-weight:600;color:var(--text);font-size:12px;}
 .selection-context-card{display:flex;gap:10px;align-items:stretch;border:1px solid var(--border2);border-radius:12px;background:linear-gradient(135deg,var(--surface-subtle),rgba(255,255,255,.015));box-shadow:0 1px 0 rgba(255,255,255,.03) inset;color:var(--text);overflow:hidden;}
 .selection-context-accent{width:3px;flex:0 0 3px;background:var(--accent);opacity:.82;}
 .selection-context-body{min-width:0;flex:1;padding:9px 10px 9px 0;}

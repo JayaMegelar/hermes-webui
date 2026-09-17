@@ -2175,6 +2175,45 @@ function ensureSkillCommandsLoadedForAutocomplete(){
 
 // ── Autocomplete dropdown ───────────────────────────────────────────────────
 
+const COUNCIL_ROLES = [
+  { name: 'lead', tag: '@lead', role: '💎 Diamond', desc: 'Lead Decider & Strategy (Orkestrator Tim)', aliases: ['diamond'] },
+  { name: 'scope', tag: '@scope', role: '⚖️ Onyx', desc: 'Scope & SOW Shield (Proteksi Kontrak & CR Guard)', aliases: ['kontrak', 'onyx'] },
+  { name: 'tech', tag: '@tech', role: '🔴 Ruby', desc: 'Tech Lead (API, DB Schema & Backend)', aliases: ['backend', 'ruby'] },
+  { name: 'ops', tag: '@ops', role: '🔷 Sapphire', desc: 'Domain & Ops Specialist (SOP Lapangan)', aliases: ['bisnis', 'sapphire'] },
+  { name: 'qa', tag: '@qa', role: '🔶 Amber', desc: 'QA & Risk (Batas Validasi, Gherkin, UAT)', aliases: ['test', 'amber'] },
+  { name: 'ux', tag: '@ux', role: '🟢 Emerald', desc: 'UX Lead (User Journey & Figma Handoff)', aliases: ['design', 'emerald'] },
+  { name: 'klien', tag: '@klien', role: '🏛️ Obsidian', desc: 'Demanding Client Persona (Sparring Kritis)', aliases: ['client', 'obsidian'] }
+];
+
+function getCouncilMentionMatches(text, cursor){
+  if(cursor === undefined || cursor === null) cursor = (text || '').length;
+  const beforeCursor = (text || '').slice(0, cursor);
+  const match = beforeCursor.match(/(^|\s)@([a-zA-Z0-9_-]*)$/);
+  if(!match) return null;
+
+  const query = match[2].toLowerCase();
+  const tokenStart = cursor - match[2].length - 1;
+  const tokenEnd = cursor;
+
+  const filtered = COUNCIL_ROLES.filter(r => {
+    if(!query) return true;
+    return r.name.toLowerCase().includes(query) ||
+           r.role.toLowerCase().includes(query) ||
+           r.aliases.some(a => a.toLowerCase().includes(query));
+  });
+
+  return filtered.map(r => ({
+    source: 'council',
+    tag: r.tag,
+    role: r.role,
+    desc: r.desc,
+    tokenStart,
+    tokenEnd
+  }));
+}
+window.COUNCIL_ROLES = COUNCIL_ROLES;
+window.getCouncilMentionMatches = getCouncilMentionMatches;
+
 let _cmdSelectedIdx=-1;
 
 function showCmdDropdown(matches){
@@ -2188,6 +2227,31 @@ function showCmdDropdown(matches){
     el.className='cmd-item';
     if(i===_cmdSelectedIdx) el.classList.add('selected');
     el.dataset.idx=i;
+
+    if(c.source==='council'){
+      el.classList.add('cmd-item-council');
+      const nameHtml=`<div class="cmd-item-head"><span class="cmd-item-council-tag">${esc(c.tag)}</span> <span class="cmd-item-council-role">${esc(c.role)}</span></div>`;
+      const descHtml=`<div class="cmd-item-desc">${esc(c.desc)}</div>`;
+      el.innerHTML=`${nameHtml}${descHtml}`;
+      el.onmousedown=(e)=>{
+        e.preventDefault();
+        const ta=$('msg');
+        if(!ta){hideCmdDropdown();return;}
+        const current=String(ta.value||'');
+        const start=Number.isFinite(Number(c.tokenStart))?Number(c.tokenStart):ta.selectionStart;
+        const end=Number.isFinite(Number(c.tokenEnd))?Number(c.tokenEnd):ta.selectionEnd;
+        const insertText=c.tag + ' ';
+        ta.value=current.slice(0,start) + insertText + current.slice(end);
+        const pos=start + insertText.length;
+        ta.focus();
+        ta.setSelectionRange(pos,pos);
+        ta.dispatchEvent(new Event('input',{bubbles:true}));
+        hideCmdDropdown();
+      };
+      dd.appendChild(el);
+      continue;
+    }
+
     const isSubArg=c.source==='subarg';
     const isPath=c.source==='path';
     const usage=(!isSubArg&&c.arg)?` <span class="cmd-item-arg">${esc(c.arg)}</span>`:'';

@@ -2311,7 +2311,9 @@ $('msg').addEventListener('input',()=>{
     _saveComposerDraft(sid, $('msg').value, S.pendingFiles ? [...S.pendingFiles] : []);
   }
   const text=$('msg').value;
+  const cursor=$('msg').selectionStart;
   const _slashIdx=typeof _activeSlashCommandOffset==='function'?_activeSlashCommandOffset(text):-1;
+  const councilMatches=typeof getCouncilMentionMatches==='function'?getCouncilMentionMatches(text,cursor):null;
   if(_slashIdx>=0&&text.indexOf('\n')===-1){
     if(typeof getSlashAutocompleteMatches==='function'){
       getSlashAutocompleteMatches(text).then(matches=>{
@@ -2324,8 +2326,9 @@ $('msg').addEventListener('input',()=>{
       if(matches.length)showCmdDropdown(matches); else hideCmdDropdown();
     }
     if(typeof ensureSkillCommandsLoadedForAutocomplete==='function') ensureSkillCommandsLoadedForAutocomplete();
+  } else if(councilMatches && councilMatches.length){
+    showCmdDropdown(councilMatches);
   } else if(typeof getComposerPathAutocompleteMatches==='function'){
-    const cursor=$('msg').selectionStart;
     getComposerPathAutocompleteMatches(text,cursor).then(matches=>{
       const ta=$('msg');
       if(!ta||ta.value!==text||ta.selectionStart!==cursor) return;
