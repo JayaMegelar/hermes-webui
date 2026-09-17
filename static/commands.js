@@ -33,6 +33,7 @@ const COMMANDS=[
   {name:'reasoning', desc:t('cmd_reasoning'), fn:cmdReasoning, arg:'show|hide|none|minimal|low|medium|high|xhigh|max', subArgs:['show','hide','none','minimal','low','medium','high','xhigh','max'], noEcho:true},
   {name:'yolo', desc:t('cmd_yolo'), fn:cmdYolo, noEcho:true},
   {name:'branch', desc:t('cmd_branch'), fn:cmdBranch, arg:'[name]', noEcho:true},
+  {name:'prd-init', desc:'Inisialisasi PRD baru dengan Template Intake Brief Gemstone Council', fn:cmdPrdInit, arg:'[nama modul]', noEcho:true},
 ];
 
 const SLASH_SUBARG_SOURCES={
@@ -2016,6 +2017,34 @@ async function cmdBranch(args){
     }
   }catch(e){showToast(t('branch_failed')+e.message);}
 }
+
+function cmdPrdInit(args){
+  const ta = $('msg');
+  if(!ta) return;
+  const modulHint = (args || '').trim();
+  const template = `📋 [PROJECT INTAKE BRIEF]
+1. Klien & Nama Sistem : 
+2. Modul yang Digarap   : ${modulHint}
+3. Problem Statement    : 
+4. Dokumen Acuan / MoM  : (Lampirkan file MoM / KAK di klip attachment jika ada)
+5. Pihak Ketiga & Integrasi : (Payment Gateway, Dukcapil, BPJS, API Vendor, dll)
+6. Pagar Kontrak / Out-of-Scope : (Fitur yang TIDAK masuk SOW fase ini)
+
+@lead Mohon Diamond kunci ruang lingkup awal & validasi bersama saya sebelum Multi-Agent merakit PRD.`;
+  ta.value = template;
+  ta.focus();
+  const pos = template.indexOf("1. Klien & Nama Sistem : ") + "1. Klien & Nama Sistem : ".length;
+  ta.setSelectionRange(pos, pos);
+  if(typeof scheduleComposerAutoResize === 'function') scheduleComposerAutoResize();
+  if(typeof showToast === 'function') showToast('Template Project Intake siap! Isi poin-poinnya atau lampirkan MoM 📄', 3500);
+}
+
+function initNewPrdFlow(){
+  if(typeof switchPanel === 'function') switchPanel('chat');
+  cmdPrdInit();
+}
+window.cmdPrdInit = cmdPrdInit;
+window.initNewPrdFlow = initNewPrdFlow;
 
 // ── Fork from a specific message point ──
 // Called from the "Fork from here" button on message hover actions.
