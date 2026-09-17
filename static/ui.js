@@ -7777,7 +7777,15 @@ function renderMd(raw){
   s=s.replace(/<em>([\s\S]*?)<\/em>/gi,(_,t)=>'*'+t+'*');
   s=s.replace(/<i>([\s\S]*?)<\/i>/gi,(_,t)=>'*'+t+'*');
   s=s.replace(/<code>([^<]*?)<\/code>/gi,(_,t)=>'`'+t+'`');
+  // Protect <br> inside markdown table rows so converting <br> to \n does not destroy the table
+  s=s.split('\n').map(line=>{
+    if(/^\s*\|.*\|\s*$/.test(line)){
+      return line.replace(/<br\s*\/?>/gi,'\x00BR\x00');
+    }
+    return line;
+  }).join('\n');
   s=s.replace(/<br\s*\/?>/gi,'\n');
+  s=s.replace(/\x00BR\x00/g,'<br>');
   // ── Glued-bold-heading lift (issue #1446) ────────────────────────────────
   // LLMs in thinking/reasoning mode frequently emit a "section header" glued
   // to the end of the previous paragraph with no whitespace, like:
@@ -7835,7 +7843,7 @@ function renderMd(raw){
     t=t.replace(/\x00G(\d+)\x00/g,(_,i)=>_img_stash[+i]);
     // Escape any plain text that isn't already wrapped in a tag we produced
     // by escaping bare < > that are not part of our own tags
-    const SAFE_INLINE=/^<\/?(strong|em|del|code|a|img)([\s>]|$)/i;
+    const SAFE_INLINE=/^<\/?(strong|em|del|code|a|img|br)([\s>]|$)/i;
     t=t.replace(/<\/?[a-z][^>]*>/gi,tag=>SAFE_INLINE.test(tag)?tag:esc(tag));
     return t;
   }
