@@ -2114,6 +2114,7 @@ function switchAppMode(mode){
 }
 
 async function initProductStudio(){
+  await refreshStudioArtifacts(true);
   renderStudioArtifactTree();
 
   const flowSelect = $('studioActiveFlowSelect');
@@ -2244,6 +2245,9 @@ async function loadStudioBpmn(bpmnPath){
       const el = e.element;
       if(el && el.businessObject && el.businessObject.name){
         syncStudioBpmnClickToPrd(el.businessObject.name, el.id);
+      }
+      if(typeof inspectStudioBpmnElement === 'function'){
+        inspectStudioBpmnElement(el);
       }
     });
   }catch(err){
@@ -2600,9 +2604,97 @@ async function copyStudioPrdMarkdown(){
   }
 }
 
-function refreshStudioArtifacts(){
+async function refreshStudioArtifacts(silent = false){
+  try {
+    if(typeof S !== 'undefined' && S && S.session){
+      // 1. Fetch PRD directory
+      const prdRoute = _workspaceRouteForPath('PRD', 'list');
+      if(prdRoute){
+        const prdRes = await api(prdRoute);
+        if(prdRes && prdRes.items){
+          const dynamicPrds = [];
+          prdRes.items.forEach(item => {
+            if(item.name && item.name.endsWith('.md')){
+              const relPath = 'PRD/' + item.name;
+              const existing = STUDIO_ARTIFACTS_DATA.prds.find(p => p.path === relPath);
+              if(existing){
+                dynamicPrds.push(existing);
+              } else {
+                const cleanTitle = item.name.replace(/^PRD_/, '').replace(/\.md$/, '').replace(/_/g, ' ');
+                dynamicPrds.push({
+                  id: item.name.replace(/\.md$/, ''),
+                  title: cleanTitle,
+                  path: relPath,
+                  flow: ''
+                });
+              }
+            }
+          });
+          if(dynamicPrds.length > 0) STUDIO_ARTIFACTS_DATA.prds = dynamicPrds;
+        }
+      }
+
+      // 2. Fetch Flows directory
+      const flowRoute = _workspaceRouteForPath('Flows', 'list');
+      if(flowRoute){
+        const flowRes = await api(flowRoute);
+        if(flowRes && flowRes.items){
+          const dynamicFlows = [];
+          flowRes.items.forEach(item => {
+            if(item.name && item.name.endsWith('.bpmn')){
+              const relPath = 'Flows/' + item.name;
+              const existing = STUDIO_ARTIFACTS_DATA.flows.find(f => f.path === relPath);
+              if(existing){
+                dynamicFlows.push(existing);
+              } else {
+                const cleanName = item.name.replace(/\.bpmn$/, '').replace(/_/g, ' ');
+                dynamicFlows.push({
+                  path: relPath,
+                  name: cleanName
+                });
+              }
+            }
+          });
+          if(dynamicFlows.length > 0) STUDIO_ARTIFACTS_DATA.flows = dynamicFlows;
+        }
+      }
+
+      // Automatically pair PRDs and Flows if names match
+      STUDIO_ARTIFACTS_DATA.prds.forEach(prd => {
+        if(!prd.flow){
+          const stem = prd.path.split('/').pop().replace(/^PRD_/, '').replace(/\.md$/, '').toLowerCase();
+          const match = STUDIO_ARTIFACTS_DATA.flows.find(f => {
+            const fstem = f.path.split('/').pop().replace(/\.bpmn$/, '').toLowerCase();
+            return fstem.includes(stem) || stem.includes(fstem);
+          });
+          if(match) prd.flow = match.path;
+        }
+      });
+    }
+  } catch(e) {
+    console.warn('Dynamic studio discovery skipped/failed:', e);
+  }
+
+  // Update counts in UI
+  const prdCountEl = $('studioPrdCount');
+  if(prdCountEl) prdCountEl.textContent = 'PRDs: ' + STUDIO_ARTIFACTS_DATA.prds.length;
+  const flowCountEl = $('studioFlowCount');
+  if(flowCountEl) flowCountEl.textContent = 'Flows: ' + STUDIO_ARTIFACTS_DATA.flows.length;
+
+  const flowSelect = $('studioActiveFlowSelect');
+  if(flowSelect){
+    flowSelect.innerHTML = '';
+    STUDIO_ARTIFACTS_DATA.flows.forEach(flow => {
+      const opt = document.createElement('option');
+      opt.value = flow.path;
+      opt.textContent = flow.name;
+      if(flow.path === _studioCurrentBpmnPath) opt.selected = true;
+      flowSelect.appendChild(opt);
+    });
+  }
+
   renderStudioArtifactTree();
-  if(typeof showToast==='function') showToast('Artifact list refreshed');
+  if(!silent && typeof showToast === 'function') showToast('Artifact list dynamically refreshed! 🔄');
 }
 
 function toggleStudioNav(){
@@ -3403,6 +3495,397 @@ window.switchAlurkerjaTab = switchAlurkerjaTab;
 window.copyAlurkerjaDdl = copyAlurkerjaDdl;
 window.openPreviewInGoogleDrive = openPreviewInGoogleDrive;
 window.copyDriveLink = copyDriveLink;
+
+/* ==========================================================================
+   Product Studio AlurKerja Inspector, Audit, & Active Collab Suite
+   ========================================================================== */
+
+async function studioAuditAlurkerja(){
+  let xml = '';
+  if(_studioBpmnViewerInstance){
+    try {
+      const res = await _studioBpmnViewerInstance.saveXML({ format: true });
+      xml = res.xml;
+    } catch(e){}
+  }
+  if(!xml && _studioCurrentBpmnPath){
+    try {
+      const data = await api(_workspaceRouteForPath(_studioCurrentBpmnPath, 'read'));
+      xml = data.content || '';
+    } catch(e){}
+  }
+  if(!xml){
+    if(typeof showToast === 'function') showToast('No active BPMN diagram to audit.', 3000, 'warning');
+    return;
+  }
+
+  _previewCurrentPath = _studioCurrentBpmnPath;
+  _previewRawContent = xml;
+  bpmnAuditAlurkerja();
+}
+
+function inspectStudioBpmnElement(el){
+  const inspector = $('studioBpmnInspector');
+  if(!inspector || !el || !el.businessObject) return;
+
+  const bo = el.businessObject;
+  const type = el.type || '';
+  const name = bo.name || bo.id || 'Unnamed Element';
+  const id = bo.id || '';
+
+  let categoryLabel = 'BPMN Element';
+  let categoryIcon = '🔷';
+  let isTask = false;
+  let isGateway = false;
+
+  if(type.includes('UserTask')){
+    categoryLabel = 'User Task (AlurKerja)';
+    categoryIcon = '👤';
+    isTask = true;
+  } else if(type.includes('ServiceTask')){
+    categoryLabel = 'Service Task (External/Worker)';
+    categoryIcon = '⚙️';
+    isTask = true;
+  } else if(type.includes('StartEvent')){
+    categoryLabel = 'Start Event';
+    categoryIcon = '🟢';
+    isTask = true;
+  } else if(type.includes('Gateway')){
+    categoryLabel = 'Decision Gateway';
+    categoryIcon = '🔀';
+    isGateway = true;
+  } else if(type.includes('SequenceFlow')){
+    categoryLabel = 'Sequence Flow';
+    categoryIcon = '➡️';
+  } else if(type.includes('EndEvent')){
+    categoryLabel = 'End Event';
+    categoryIcon = '🔴';
+  }
+
+  // Extract Form Fields
+  const formFields = [];
+  if(bo.extensionElements && bo.extensionElements.values){
+    bo.extensionElements.values.forEach(ext => {
+      if(ext.$type === 'camunda:FormData' && ext.fields){
+        ext.fields.forEach(f => {
+          let isViewOnly = false;
+          let isMandatory = false;
+          if(f.properties && f.properties.values){
+            f.properties.values.forEach(p => {
+              if(p.id === 'isViewOnly' && p.value === 'true') isViewOnly = true;
+              if(p.id === 'isMandatory' && p.value === 'true') isMandatory = true;
+            });
+          }
+          formFields.push({
+            id: f.id,
+            label: f.label || f.id,
+            type: f.type || 'string',
+            viewOnly: isViewOnly,
+            mandatory: isMandatory
+          });
+        });
+      }
+    });
+  }
+
+  // Extract Decisions
+  const decisions = [];
+  if(bo.outgoing && bo.outgoing.length > 0){
+    bo.outgoing.forEach(flow => {
+      const flowName = flow.name || flow.id;
+      const cond = flow.conditionExpression ? flow.conditionExpression.body : '';
+      if(cond || isGateway){
+        decisions.push({ name: flowName, condition: cond, target: flow.targetRef?.name || flow.targetRef?.id });
+      }
+    });
+  }
+
+  let tableName = '';
+  if(isTask){
+    const processId = bo.$parent?.id || 'process';
+    tableName = `${_toSnakeCase(processId)}_${_toSnakeCase(id)}`;
+  }
+
+  let html = `
+    <div class="studio-bpmn-inspector-head">
+      <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+        <span style="font-size:14px;">${categoryIcon}</span>
+        <strong style="color:#fff;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px;" title="${name}">${name}</strong>
+        <span style="font-size:10px;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.15);color:#93c5fd;">${categoryLabel}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        ${tableName ? `<span style="font-family:var(--font-mono);font-size:10.5px;color:#cbd5e1;background:rgba(0,0,0,0.3);padding:2px 7px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);" title="AlurKerja DB Table">🗄️ ${tableName}</span>` : ''}
+        <button class="panel-icon-btn" onclick="$('studioBpmnInspector').style.display='none'" style="color:#94a3b8;font-size:13px;padding:2px 6px;background:transparent;border:none;cursor:pointer;">✕</button>
+      </div>
+    </div>
+  `;
+
+  if(formFields.length > 0){
+    html += `
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <div style="font-size:10.5px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">📋 Form Attributes (${formFields.length} fields):</div>
+        <div class="studio-bpmn-inspector-tags">
+    `;
+    formFields.forEach(f => {
+      let tagClass = 'studio-bpmn-tag';
+      if(f.viewOnly) tagClass += ' view-only';
+      if(f.mandatory) tagClass += ' mandatory';
+      html += `<span class="${tagClass}" title="${f.label} (${f.type}) • Click to copy ID" onclick="navigator.clipboard.writeText('${f.id}');if(typeof showToast==='function')showToast('Copied ${f.id}')" style="cursor:pointer;">${f.id} <span style="opacity:0.6;font-size:9.5px;">:${f.type}</span></span>`;
+    });
+    html += `</div></div>`;
+  } else if(isTask){
+    html += `<div style="font-size:11px;color:#94a3b8;font-style:italic;">Belum ada form fields (&lt;camunda:formField&gt;) pada task ini.</div>`;
+  }
+
+  if(decisions.length > 0){
+    html += `
+      <div style="display:flex;flex-direction:column;gap:4px;margin-top:2px;">
+        <div style="font-size:10.5px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">🔀 Actions &amp; Conditions (${decisions.length}):</div>
+        <div class="studio-bpmn-inspector-tags">
+    `;
+    decisions.forEach(d => {
+      html += `<span class="studio-bpmn-tag decision" title="${d.condition || 'Default flow'}"><strong>${d.name}</strong> ${d.condition ? `<code style="font-size:10px;opacity:0.9;">${d.condition}</code>` : ''}</span>`;
+    });
+    html += `</div></div>`;
+  }
+
+  inspector.innerHTML = html;
+  inspector.style.display = 'flex';
+}
+
+/* ==========================================================================
+   Active Collab SOW Sizer & Task Generator (Tribe Javan 1 & 3 USP Disciplines)
+   ========================================================================== */
+let _parsedAcStories = [];
+
+async function openStudioActiveCollabModal(){
+  const modal = $('activeCollabModal');
+  if(!modal) return;
+
+  let prdText = '';
+  if(_studioCurrentPrdPath){
+    try {
+      const res = await api(_workspaceRouteForPath(_studioCurrentPrdPath, 'read'));
+      prdText = res.content || '';
+    } catch(e){}
+  }
+  if(!prdText){
+    const viewer = $('studioPrdViewer');
+    prdText = viewer ? viewer.innerText : '';
+  }
+
+  if(!prdText){
+    if(typeof showToast==='function') showToast('No active PRD specification found to analyze.', 3000, 'warning');
+    return;
+  }
+
+  $('acModalSubtitle').textContent = `Auditing: ${_studioCurrentPrdPath || 'Active PRD'} • Tribe Javan SOW Disciplines`;
+
+  _parsedAcStories = parsePrdUserStories(prdText);
+  renderActiveCollabModalContent(_parsedAcStories);
+
+  modal.style.display = 'flex';
+}
+
+function closeActiveCollabModal(){
+  const modal = $('activeCollabModal');
+  if(modal) modal.style.display = 'none';
+}
+
+function parsePrdUserStories(text){
+  const lines = text.split('\n');
+  const stories = [];
+  let currentStory = null;
+
+  for(let i = 0; i < lines.length; i++){
+    const line = lines[i];
+
+    const storyMatch = line.match(/^#{2,4}\s+(?:(?:Section\s+\d+|[0-9\.]+)\s+)?(US-?\d+|User Story\s*\d+|Story\s*\d+)[:\s]+(.*)$/i);
+    if(storyMatch){
+      if(currentStory) stories.push(currentStory);
+      currentStory = {
+        key: storyMatch[1].trim().toUpperCase(),
+        title: storyMatch[2].trim(),
+        rawLines: [],
+        usp: 0,
+        acList: []
+      };
+      continue;
+    }
+
+    if(currentStory){
+      currentStory.rawLines.push(line);
+
+      const uspMatch = line.match(/(?:usp|bobot|story\s*points?|points?)\s*[:=]\s*(\d+)/i);
+      if(uspMatch && !currentStory.usp){
+        currentStory.usp = parseInt(uspMatch[1], 10);
+      }
+
+      const acMatch = line.match(/^\s*[-*]\s*(Given\b.*|When\b.*|Then\b.*|Scenario\b.*|Kriteria\b.*)/i);
+      if(acMatch){
+        currentStory.acList.push(acMatch[1].trim());
+      }
+    }
+  }
+
+  if(currentStory) stories.push(currentStory);
+
+  if(stories.length === 0){
+    let idx = 1;
+    for(let i = 0; i < lines.length; i++){
+      const m = lines[i].match(/^\s*[-*]\s+\*\*Sebagai\*\*\s+(.*)/i) || lines[i].match(/^\s*[-*]\s+\*\*As a\*\*\s+(.*)/i);
+      if(m){
+        stories.push({
+          key: 'US-' + String(idx).padStart(2, '0'),
+          title: 'Implementasi Fitur ' + m[1].slice(0, 40),
+          usp: 3,
+          acList: ['Pengujian fungsional dan happy path']
+        });
+        idx++;
+      }
+    }
+  }
+
+  stories.forEach(s => {
+    if(!s.usp) s.usp = 3;
+  });
+
+  return stories;
+}
+
+function renderActiveCollabModalContent(stories){
+  const statsEl = $('acSummaryStats');
+  const bodyEl = $('acModalBody');
+  if(!bodyEl) return;
+
+  bodyEl.innerHTML = '';
+
+  let totalUsp = 0;
+  let invalidStories = 0;
+
+  stories.forEach(s => {
+    totalUsp += s.usp;
+    if(s.usp !== 1 && s.usp !== 3){
+      invalidStories++;
+    }
+  });
+
+  statsEl.innerHTML = `
+    <span>📊 Total Stories: <strong>${stories.length}</strong></span>
+    <span>⚡ Total USP: <strong>${totalUsp} USP</strong></span>
+    <span style="color:${invalidStories === 0 ? '#10b981' : '#ef4444'};">
+      ${invalidStories === 0 ? '✅ 100% Sesuai Aturan Javan (1 & 3 USP Only)' : `⚠️ ${invalidStories} Story Melebihi Batas (>3 USP / Non-Standard)`}
+    </span>
+  `;
+
+  if(stories.length === 0){
+    bodyEl.innerHTML = '<div style="padding:30px;text-align:center;color:var(--muted);">Tidak ditemukan klausul User Story terstruktur dalam PRD ini.<br>Pastikan format heading PRD menggunakan format: <code>### US-01: Nama Fitur</code> atau <code>- Bobot: 3 USP</code>.</div>';
+    return;
+  }
+
+  stories.forEach(s => {
+    const isValidUsp = (s.usp === 1 || s.usp === 3);
+    const card = document.createElement('div');
+    card.className = 'ac-story-card ' + (isValidUsp ? 'valid' : 'invalid');
+
+    let uspBadgeClass = s.usp === 1 ? 'usp-1' : s.usp === 3 ? 'usp-3' : 'usp-invalid';
+    let uspLabel = s.usp === 1 ? '1 USP (XS)' : s.usp === 3 ? '3 USP (S)' : `${s.usp} USP (⚠️ Dilarang di Javan)`;
+
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <strong style="color:var(--blue);font-size:13px;">[${s.key}]</strong>
+          <span style="font-weight:600;font-size:13px;color:var(--text);">${s.title}</span>
+        </div>
+        <span class="ac-badge-usp ${uspBadgeClass}">${uspLabel}</span>
+      </div>
+
+      ${!isValidUsp ? `
+        <div style="font-size:11.5px;color:#ef4444;background:rgba(239,68,68,0.08);padding:6px 10px;border-radius:4px;">
+          ⚠️ <strong>Peringatan People Growth (PG) Javan:</strong> Bobot story ${s.usp} USP melampaui batas maksimum Javan (Max 3 USP). Anda wajib memecah (*split*) story ini menjadi minimal 2 User Story berukuran 1 USP atau 3 USP agar tidak menjadi temuan audit.
+        </div>
+      ` : ''}
+
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
+        <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Active Collab Child Tasks (Due Date &le; Parent Story):</div>
+        
+        <div class="ac-task-item">
+          <span>🛠️ <strong>[DEV] Implementasi Frontend &amp; Backend:</strong> ${s.title}</span>
+          <span style="font-size:11px;color:var(--muted);background:var(--hover-bg);padding:2px 6px;border-radius:4px;">H-2 (New) ➔ H-1 (RFT)</span>
+        </div>
+
+        <div class="ac-task-item">
+          <span>🧪 <strong>[TEST] QA &amp; Acceptance Criteria Validation:</strong> ${s.title}</span>
+          <span style="font-size:11px;color:#10b981;background:rgba(16,185,129,0.1);padding:2px 6px;border-radius:4px;">Hari H (Closed) • SLA &le; 24 Jam</span>
+        </div>
+      </div>
+    `;
+    bodyEl.appendChild(card);
+  });
+}
+
+async function copyActiveCollabTasks(){
+  if(!_parsedAcStories || _parsedAcStories.length === 0){
+    if(typeof showToast==='function') showToast('No stories to copy', 3000, 'warning');
+    return;
+  }
+
+  let text = `# ACTIVE COLLAB TASK BREAKDOWN (PT Javan Cipta Solusi)\n`;
+  text += `# Project PRD: ${_studioCurrentPrdPath || 'Sprint Tasklist'}\n`;
+  text += `# Standard: 1 & 3 USP Only • Child Task Due Date <= Parent Story\n\n`;
+
+  _parsedAcStories.forEach(s => {
+    text += `### [${s.key}] ${s.title} (${s.usp} USP)\n`;
+    text += `* **Story Weight**: ${s.usp} USP (${s.usp === 1 ? 'XS' : 'S'})\n`;
+    text += `* **Tasks Breakdown**:\n`;
+    text += `  - [ ] [DEV] Frontend & Backend Implementation: ${s.title} [Est: H-1, Target: RFT]\n`;
+    text += `  - [ ] [TEST] QA Acceptance Criteria & Regression: ${s.title} [Est: Hari H, SLA <= 24 Jam]\n`;
+    if(s.acList.length > 0){
+      text += `* **Acceptance Criteria**:\n`;
+      s.acList.forEach(ac => {
+        text += `  - ${ac}\n`;
+      });
+    }
+    text += `\n`;
+  });
+
+  try {
+    await navigator.clipboard.writeText(text);
+    if(typeof showToast==='function') showToast('Active Collab task checklist copied to clipboard! 📋');
+  } catch(e){
+    if(typeof showToast==='function') showToast('Failed to copy to clipboard', 3000, 'error');
+  }
+}
+
+function exportActiveCollabCsv(){
+  if(!_parsedAcStories || _parsedAcStories.length === 0) return;
+
+  let csv = 'Task Name,Parent Story,USP,Estimate,Label,Description\n';
+  _parsedAcStories.forEach(s => {
+    csv += `"${s.key}: ${s.title.replace(/"/g, '""')}","",${s.usp},${s.usp * 4}h,"Story","Acceptance criteria: ${s.acList.join('; ').replace(/"/g, '""')}"\n`;
+    csv += `"[DEV] Implementasi ${s.title.replace(/"/g, '""')}","${s.key}",${s.usp},${s.usp * 3}h,"Development","Flow: New -> Ready -> RFT"\n`;
+    csv += `"[TEST] QA Verification ${s.title.replace(/"/g, '""')}","${s.key}",0,1h,"QA","Flow: RFT -> Closed. SLA <= 24h"\n`;
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `active_collab_tasks_${Date.now()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  if(typeof showToast==='function') showToast('Active Collab CSV exported successfully! 💾');
+}
+
+window.inspectStudioBpmnElement = inspectStudioBpmnElement;
+window.studioAuditAlurkerja = studioAuditAlurkerja;
+window.openStudioActiveCollabModal = openStudioActiveCollabModal;
+window.closeActiveCollabModal = closeActiveCollabModal;
+window.copyActiveCollabTasks = copyActiveCollabTasks;
+window.exportActiveCollabCsv = exportActiveCollabCsv;
+
 
 
 

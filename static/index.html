@@ -793,6 +793,169 @@
     font-size: 9pt !important;
   }
 }
+
+/* ==========================================================================
+   Active Collab SOW Sizer & Smart BPMN Inspector System (Javan Tribe Edition)
+   ========================================================================== */
+.ac-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.ac-modal-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  max-width: 880px;
+  width: 100%;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 16px 36px rgba(0,0,0,0.28);
+  overflow: hidden;
+}
+.ac-modal-header {
+  padding: 14px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ac-modal-banner {
+  padding: 8px 18px;
+  background: rgba(16, 185, 129, 0.08);
+  border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+  font-size: 11.5px;
+  color: #059669;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+:root.dark .ac-modal-banner {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+.ac-modal-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ac-story-card {
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.15s ease;
+}
+.ac-story-card.valid {
+  border-left: 4px solid #10b981;
+}
+.ac-story-card.invalid {
+  border-left: 4px solid #ef4444;
+  background: rgba(239, 68, 68, 0.03);
+}
+.ac-badge-usp {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.ac-badge-usp.usp-1 {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+.ac-badge-usp.usp-3 {
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+  border: 1px solid rgba(37, 99, 235, 0.25);
+}
+.ac-badge-usp.usp-invalid {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+.ac-task-item {
+  font-size: 11.5px;
+  padding: 5px 9px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border2);
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.studio-bpmn-inspector {
+  position: absolute;
+  bottom: 12px;
+  left: 14px;
+  right: 14px;
+  background: rgba(15, 23, 42, 0.94);
+  color: #f8fafc;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  backdrop-filter: blur(10px);
+  z-index: 30;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  animation: studioSlideUp 0.18s ease-out;
+}
+@keyframes studioSlideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.studio-bpmn-inspector-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.studio-bpmn-inspector-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.studio-bpmn-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: rgba(255,255,255,0.1);
+  color: #e2e8f0;
+}
+.studio-bpmn-tag.view-only {
+  border-left: 2px solid #38bdf8;
+}
+.studio-bpmn-tag.mandatory {
+  border-left: 2px solid #f59e0b;
+}
+.studio-bpmn-tag.decision {
+  border-left: 2px solid #10b981;
+  background: rgba(16, 185, 129, 0.18);
+  color: #6ee7b7;
+}
 </style>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
   <!-- KaTeX math rendering CSS (loaded eagerly from vendored assets to prevent font CSP noise) -->
@@ -2476,6 +2639,10 @@
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 <span>Diskusi PRD</span>
               </button>
+              <button class="studio-btn" id="btnStudioActiveCollab" onclick="openStudioActiveCollabModal()" style="color:#10b981;font-weight:600;" title="Breakdown User Stories & SOW ke Tiket Active Collab (Standar Javan 1 & 3 USP)">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                <span>AC Sizer (1 & 3 USP)</span>
+              </button>
               <button class="studio-btn" id="btnStudioEditPrd" onclick="toggleStudioPrdEdit()" title="Edit PRD Specification">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                 <span id="studioEditBtnLabel">Edit</span>
@@ -2590,12 +2757,17 @@
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 <span>SVG</span>
               </button>
+              <button class="studio-btn" id="btnStudioAuditAlurkerja" onclick="studioAuditAlurkerja()" style="color:#10b981;font-weight:600;" title="Audit AlurKerja Compliance (Standar Javan BPMN 2.0 & PostgreSQL DDL)">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span>Audit AlurKerja</span>
+              </button>
             </div>
           </div>
           <div id="studioBpmnContainer" style="flex:1;width:100%;height:100%;min-height:500px;"></div>
           <div id="studioSyncBar" style="position:absolute;bottom:12px;left:14px;right:14px;background:rgba(15,23,42,0.92);color:#fff;padding:7px 14px;border-radius:8px;font-size:11.5px;display:flex;align-items:center;justify-content:space-between;backdrop-filter:blur(6px);pointer-events:none;z-index:25;box-shadow:0 4px 16px rgba(0,0,0,0.2);">
             <span id="studioSyncStatusText" style="display:inline-flex;align-items:center;gap:6px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> <span id="studioSyncMsg">Bidirectional Sync Active — Click any task or gateway in BPMN to inspect PRD</span></span>
           </div>
+          <div id="studioBpmnInspector" class="studio-bpmn-inspector" style="display:none;"></div>
         </div>
       </div>
 
@@ -2909,6 +3081,34 @@
         <pre class="alurkerja-sql-pre" id="alurkerjaSqlCode"></pre>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Active Collab SOW Sizer & Task Generator Modal -->
+<div class="ac-modal-overlay" id="activeCollabModal" style="display:none;" onclick="if(event.target===this)closeActiveCollabModal()">
+  <div class="ac-modal-card" role="dialog" aria-modal="true" aria-labelledby="acModalTitle">
+    <div class="ac-modal-header">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:20px;">🎫</span>
+        <div>
+          <div style="font-weight:700;font-size:13.5px;" id="acModalTitle">Active Collab SOW Sizer &amp; Task Generator</div>
+          <div style="font-size:11px;color:var(--muted);" id="acModalSubtitle">PT Javan Cipta Solusi Mini Waterfall &amp; 1-3 USP Disciplines</div>
+        </div>
+      </div>
+      <button class="panel-icon-btn" onclick="closeActiveCollabModal()" style="font-size:15px;padding:3px 8px;border-radius:4px;cursor:pointer;">✕</button>
+    </div>
+    <div class="ac-modal-banner">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span><strong>Aturan Active Collab Tribe Javan:</strong> Hanya 1 USP (XS) atau 3 USP (S). Child Task Due Date &le; Parent Story. SLA Pengujian RFT &le; 24 Jam.</span>
+    </div>
+    <div style="padding:10px 20px;background:var(--surface-subtle);border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div id="acSummaryStats" style="font-size:12px;font-weight:600;display:flex;gap:14px;color:var(--text);"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="studio-btn studio-btn-primary" onclick="copyActiveCollabTasks()" title="Copy all structured tasks to clipboard">📋 Copy Tiket Active Collab</button>
+        <button class="studio-btn" onclick="exportActiveCollabCsv()" title="Export CSV for Active Collab import">💾 Export CSV</button>
+      </div>
+    </div>
+    <div class="ac-modal-body" id="acModalBody"></div>
   </div>
 </div>
 </body>
