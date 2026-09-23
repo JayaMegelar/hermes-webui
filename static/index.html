@@ -2641,6 +2641,7 @@
         <span class="preview-badge" id="previewBadge"></span>
         <button id="btnToggleWorkbench" class="panel-icon-btn" style="font-size:12px;width:auto;padding:2px 8px;display:none;align-items:center;gap:4px;color:var(--blue);font-weight:600" onclick="toggleSplitWorkbench()" title="Toggle Split Workbench (PRD & BPMN)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18"/></svg> <span id="btnToggleWorkbenchLabel">Split Workbench</span></button>
         <button id="btnOpenInDrive" class="panel-icon-btn" style="font-size:12px;width:auto;padding:2px 8px;display:none;align-items:center;gap:4px" onclick="openPreviewInGoogleDrive()" title="Open file in Google Drive"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2L2 19.5h20L12 2zm0 4.5l6.5 11h-13L12 6.5z"/></svg> <span class="preview-btn-label">Open in Drive</span></button>
+        <button id="btnCopyDriveLink" class="panel-icon-btn" style="font-size:12px;width:auto;padding:2px 8px;display:none;align-items:center;gap:4px" onclick="copyDriveLink()" title="Copy Google Drive share link"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> <span class="preview-btn-label">Copy Link</span></button>
         <button id="btnCopyPreviewRelPath" class="panel-icon-btn" style="font-size:12px;width:auto;padding:2px 8px;display:inline-flex;align-items:center;gap:4px" onclick="copyPreviewRelativePath()" title="Copy relative path" aria-label="Copy relative path" data-i18n-title="copy_relative_path" data-i18n-aria-label="copy_relative_path"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> <span class="preview-btn-label" data-i18n="copy_relative_path">Copy relative path</span></button>
         <button id="btnOpenInBrowser" class="panel-icon-btn" style="margin-left:auto;font-size:12px;width:auto;padding:2px 8px;display:none;align-items:center;gap:4px" onclick="openInBrowser()" title="Open in new browser tab"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> <span data-i18n="open_in_browser">Open in browser</span></button>
         <button id="btnRenderMarkdownAnyway" class="panel-icon-btn" style="font-size:12px;width:auto;padding:2px 8px;display:none;align-items:center;gap:4px" onclick="forceRenderMarkdownPreview()" title="Render this large file as rich Markdown"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/><path d="M7 8h10"/><path d="M7 12h10"/><path d="M7 16h6"/></svg> Render as markdown anyway</button>
@@ -2660,6 +2661,7 @@
       <div class="preview-bpmn-wrap" id="previewBpmnWrap" style="display:none;flex:1;flex-direction:column;position:relative;width:100%;height:100%;min-height:500px;border-radius:8px;overflow:hidden;border:1px solid var(--border2);background:#ffffff;">
         <div id="previewBpmnCanvas" style="width:100%;height:100%;min-height:480px;flex:1;"></div>
         <div class="preview-bpmn-controls" style="position:absolute;bottom:12px;right:12px;display:flex;gap:6px;z-index:10;">
+          <button id="btnBpmnAudit" class="panel-icon-btn" style="background:#10b981;border:1px solid #059669;color:#fff;padding:4px 10px;font-size:12px;border-radius:5px;box-shadow:0 2px 6px rgba(16,185,129,0.3);cursor:pointer;font-weight:600;" onclick="bpmnAuditAlurkerja()" title="Audit AlurKerja Compliance & DDL (Javan Standard)">🛡️ Audit AlurKerja</button>
           <button id="btnBpmnSave" class="panel-icon-btn" style="background:#2563eb;border:1px solid #1d4ed8;color:#fff;padding:4px 10px;font-size:12px;border-radius:5px;box-shadow:0 2px 6px rgba(37,99,235,0.3);cursor:pointer;font-weight:600;" onclick="bpmnSaveDiagram()" title="Save Diagram to Server">💾 Save BPMN</button>
           <button id="btnBpmnFit" class="panel-icon-btn" style="background:rgba(255,255,255,0.92);border:1px solid #ccc;color:#222;padding:4px 10px;font-size:12px;border-radius:5px;box-shadow:0 2px 6px rgba(0,0,0,0.15);cursor:pointer;" onclick="bpmnFitViewport()" title="Fit Diagram to Viewport">⛶ Fit View</button>
           <button id="btnBpmnExportSvg" class="panel-icon-btn" style="background:rgba(255,255,255,0.92);border:1px solid #ccc;color:#222;padding:4px 10px;font-size:12px;border-radius:5px;box-shadow:0 2px 6px rgba(0,0,0,0.15);cursor:pointer;" onclick="exportBpmnSvg()" title="Export Diagram as SVG">💾 Export SVG</button>
@@ -2879,5 +2881,35 @@
   <div id="outlinePanel"></div>
 </div>
 <div class="profile-dropdown" id="profileDropdown"></div>
+
+<!-- AlurKerja Compliance & DDL Modal -->
+<div class="alurkerja-modal-overlay" id="alurkerjaAuditModal" style="display:none;" onclick="if(event.target===this)closeAlurkerjaAuditModal()">
+  <div class="alurkerja-modal-card" role="dialog" aria-modal="true" aria-labelledby="alurkerjaModalTitle">
+    <div class="alurkerja-modal-header">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:20px;">🛡️</span>
+        <div>
+          <div style="font-weight:700;font-size:13.5px;" id="alurkerjaModalTitle">AlurKerja Compliance &amp; DDL Inspector</div>
+          <div style="font-size:11px;color:var(--muted);" id="alurkerjaModalSubtitle">PT Javan Cipta Solusi BPMN 2.0 &amp; Database Standards</div>
+        </div>
+      </div>
+      <button class="panel-icon-btn" onclick="closeAlurkerjaAuditModal()" style="font-size:15px;padding:3px 8px;border-radius:4px;cursor:pointer;">✕</button>
+    </div>
+    <div class="alurkerja-modal-tabs">
+      <button class="alurkerja-tab-btn active" id="btnTabAuditRules" onclick="switchAlurkerjaTab('rules')">📋 Audit Checklist (<span id="alurkerjaPassCount">0</span>/6 Passed)</button>
+      <button class="alurkerja-tab-btn" id="btnTabAuditDdl" onclick="switchAlurkerjaTab('ddl')">💾 AlurKerja PostgreSQL DDL</button>
+    </div>
+    <div class="alurkerja-modal-body" id="alurkerjaAuditBody">
+      <div id="alurkerjaTabContentRules"></div>
+      <div id="alurkerjaTabContentDdl" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <span style="font-size:11.5px;color:var(--muted);">PostgreSQL schema generated from Process Definition &amp; User Tasks:</span>
+          <button class="panel-icon-btn" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;padding:4px 12px;font-size:11.5px;border-radius:5px;cursor:pointer;font-weight:600;" onclick="copyAlurkerjaDdl()">📋 Copy DDL SQL</button>
+        </div>
+        <pre class="alurkerja-sql-pre" id="alurkerjaSqlCode"></pre>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>

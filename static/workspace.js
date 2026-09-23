@@ -892,7 +892,10 @@ function renderMarkdownPreviewContent(data){
   const target=data&&data.el?data.el:$('previewMd');
   if(!data||!data.el) showPreview('md');
   target.innerHTML=renderMd(data.content);
-  requestAnimationFrame(()=>{if(typeof renderKatexBlocks==='function')renderKatexBlocks();});
+  requestAnimationFrame(()=>{
+    if(typeof renderKatexBlocks==='function')renderKatexBlocks();
+    _buildMarkdownToc(target);
+  });
 }
 
 function renderCodePreviewContent(path, content){
@@ -968,6 +971,8 @@ function showPreview(mode){
   $('previewHtmlWrap').style.display = mode==='html'  ? '' : 'none';
   const bpmnWrap=$('previewBpmnWrap'); if(bpmnWrap) bpmnWrap.style.display = mode==='bpmn' ? 'flex' : 'none';
   const wbWrap=$('workbenchSplitWrap'); if(wbWrap) wbWrap.style.display = mode==='workbench' ? 'flex' : 'none';
+  const mdToc = document.getElementById('previewMdFloatingToc');
+  if(mdToc) mdToc.style.display = (mode==='md') ? 'flex' : 'none';
   const rpanel=document.querySelector('.rightpanel');
   if(rpanel) rpanel.classList.toggle('workbench-mode-active', mode==='workbench');
   $('previewEditArea').style.display = 'none';  // start in read-only
@@ -1124,7 +1129,13 @@ const WORKSPACE_GDRIVE_MAP = {
   'Flows/flow_attendance_session.bpmn': 'https://drive.google.com/open?id=1Bgk6oTiltCK-9r3xhdidxqlhCCnwXqFP',
   'Flows/flow_gradebook_eval.bpmn': 'https://drive.google.com/open?id=1EHWhViRw4HigNtpCDbeWwRWrt0NUubhQ',
   'Flows/ems_master_workflow.bpmn': 'https://drive.google.com/open?id=1Qhv4ZoPvtMCpuIoPqRikmzNJYeeNf1SN',
-  'Flows/sample_order_process.bpmn': 'https://drive.google.com/open?id=1eTxVSGkKHMzF9hTaVlKWDPTlRNfLtBE_'
+  'Flows/sample_order_process.bpmn': 'https://drive.google.com/open?id=1eTxVSGkKHMzF9hTaVlKWDPTlRNfLtBE_',
+  'Flows/LeaveApproval.bpmn': 'https://drive.google.com/open?id=1tMUc-fJd5PEWpEYtSDu3ZfvWhMT1k-Uy',
+  'Docs/Javan/Analisis_dan_Desain_Alurkerja.pdf': 'https://drive.google.com/open?id=1z1haiMyyrn14EjNUF72vsQ6B8_CCplnE',
+  'Docs/Javan/Fundamental_Operational_-_Tribe_Javan.pdf': 'https://drive.google.com/open?id=1tOYo9grrKPtz2uVmC9WYCc02QqPi-lF1',
+  'Docs/Javan/Panduan_Kerja_Product_Analyst__1_.pdf': 'https://drive.google.com/open?id=1gKUl7jQcpE9IebwLzsZoCjhk468w7FVh',
+  'Docs/Javan/SOP_Active_Collab.pdf': 'https://drive.google.com/open?id=1-XQXp22XnkdijPGE2ggVlmPHpWFxcc3b',
+  'Docs/Javan/Fundamental_Operational_-_Tribe_Javan.md': 'https://drive.google.com/open?id=11a60p3ZTCgxt-W7wrfSHpBNgGoOOl6cK'
 };
 
 const WORKBENCH_PAIR_MAP = {
@@ -1173,6 +1184,10 @@ function _destroyBpmnViewer(){
   if(btnWb) btnWb.style.display = 'none';
   const btnDrive = $('btnOpenInDrive');
   if(btnDrive) btnDrive.style.display = 'none';
+  const btnCopyDrive = $('btnCopyDriveLink');
+  if(btnCopyDrive) btnCopyDrive.style.display = 'none';
+  const mdToc = document.getElementById('previewMdFloatingToc');
+  if(mdToc) mdToc.style.display = 'none';
 }
 
 function loadBpmnViewerLibrary(){
@@ -1298,13 +1313,29 @@ function bpmnToggleRawXml(){
   }
 }
 
+function getGoogleDriveLinkForPath(path){
+  if(!path) return '';
+  if(WORKSPACE_GDRIVE_MAP[path]) return WORKSPACE_GDRIVE_MAP[path];
+  if(path.startsWith('Docs/Javan/') || path.includes('Javan/')) {
+    return 'https://drive.google.com/open?id=1T6hm2VkzaWG8YbRB4A0jMg7wbMaxgKp0';
+  }
+  return 'https://drive.google.com/drive/u/0/folders/Hermes_Artifacts';
+}
+
 function openPreviewInGoogleDrive(){
   if(!_previewCurrentPath) return;
-  const directLink = WORKSPACE_GDRIVE_MAP[_previewCurrentPath];
-  if(directLink){
-    window.open(directLink, '_blank', 'noopener,noreferrer');
-  } else {
-    window.open('https://drive.google.com/drive/u/0/folders/Hermes_Artifacts', '_blank', 'noopener,noreferrer');
+  const link = getGoogleDriveLinkForPath(_previewCurrentPath);
+  window.open(link, '_blank', 'noopener,noreferrer');
+}
+
+async function copyDriveLink(){
+  if(!_previewCurrentPath) return;
+  const link = getGoogleDriveLinkForPath(_previewCurrentPath);
+  try {
+    await navigator.clipboard.writeText(link);
+    if(typeof showToast==='function') showToast('Google Drive link copied to clipboard! 📋');
+  } catch(e) {
+    if(typeof showToast==='function') showToast(link, 5000);
   }
 }
 
@@ -1576,6 +1607,13 @@ async function openFile(path, opts={}){
   $('previewPathText').textContent=path;
   $('previewArea').classList.add('visible');
   $('fileTree').style.display='none';
+  if(typeof ensureWorkspacePreviewVisible==='function'){
+    ensureWorkspacePreviewVisible();
+  } else if(typeof openWorkspacePanel==='function'){
+    openWorkspacePanel('preview');
+  } else if(typeof toggleWorkspacePanel==='function'){
+    toggleWorkspacePanel(true);
+  }
 
   _previewCurrentPath = path;
   renderFileBreadcrumb(path);
@@ -1589,8 +1627,13 @@ async function openFile(path, opts={}){
     if(wbLabel) wbLabel.textContent = 'Split Workbench';
   }
   const btnDrive = $('btnOpenInDrive');
+  const btnCopyDrive = $('btnCopyDriveLink');
+  const showDriveBtn = (WORKSPACE_GDRIVE_MAP[path] || isPrdOrFlow || path.startsWith('Docs/Javan/'));
   if(btnDrive){
-    btnDrive.style.display = (WORKSPACE_GDRIVE_MAP[path] || isPrdOrFlow) ? 'inline-flex' : 'none';
+    btnDrive.style.display = showDriveBtn ? 'inline-flex' : 'none';
+  }
+  if(btnCopyDrive){
+    btnCopyDrive.style.display = showDriveBtn ? 'inline-flex' : 'none';
   }
 
   if(IMAGE_EXTS.has(ext)){
@@ -2873,7 +2916,7 @@ function insertCouncilRole(tag){
     textarea.focus();
     return;
   }
-  const roleRe = /^@(?:lead|diamond|scope|kontrak|tech|backend|ops|bisnis|qa|test|ux|design|klien|client)\s*/i;
+  const roleRe = /^@(?:lead|diamond|scope|kontrak|tech|backend|ops|bisnis|qa|test|ux|design|klien|client|polaris|vega|arcturus|sirius|rigel|fitgap|standard|orm|clean)\s*/i;
   if(roleRe.test(current)){
     textarea.value = current.replace(roleRe, tag + ' ');
   } else {
@@ -2883,5 +2926,483 @@ function insertCouncilRole(tag){
   if(typeof autoResizeComposer === 'function') autoResizeComposer();
 }
 window.insertCouncilRole = insertCouncilRole;
+
+/* ==========================================================================
+   Markdown Floating Table of Contents (TOC) Engine
+   ========================================================================== */
+let _tocCollapsed = false;
+
+function _buildMarkdownToc(targetEl){
+  const existingToc = document.getElementById('previewMdFloatingToc');
+  if(existingToc) existingToc.remove();
+
+  if(!targetEl) return;
+  const headings = targetEl.querySelectorAll('h1, h2, h3, h4');
+  if(headings.length < 2) return;
+
+  const tocWrap = document.createElement('div');
+  tocWrap.id = 'previewMdFloatingToc';
+  tocWrap.className = 'preview-toc-floating' + (_tocCollapsed ? ' collapsed' : '');
+
+  // Header
+  const header = document.createElement('div');
+  header.className = 'preview-toc-header';
+  header.title = 'Click to toggle Table of Contents';
+  header.innerHTML = `
+    <span class="preview-toc-title"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg> Outline (${headings.length})</span>
+    <span class="preview-toc-toggle" style="font-size:10px;opacity:0.7">${_tocCollapsed ? '▶' : '▼'}</span>
+  `;
+
+  // Body
+  const body = document.createElement('div');
+  body.className = 'preview-toc-body';
+
+  const headingElements = [];
+
+  headings.forEach((h, idx) => {
+    if(!h.id){
+      const slug = h.textContent.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      h.id = slug || ('toc-h-' + idx);
+    }
+    headingElements.push(h);
+
+    const a = document.createElement('a');
+    a.className = 'preview-toc-item level-' + h.tagName.toLowerCase();
+    a.href = '#' + h.id;
+    a.textContent = h.textContent.trim();
+    a.title = h.textContent.trim();
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      body.querySelectorAll('.preview-toc-item').forEach(item => item.classList.remove('active'));
+      a.classList.add('active');
+    });
+    body.appendChild(a);
+  });
+
+  header.addEventListener('click', () => {
+    _tocCollapsed = !_tocCollapsed;
+    tocWrap.classList.toggle('collapsed', _tocCollapsed);
+    const toggleIcon = header.querySelector('.preview-toc-toggle');
+    if(toggleIcon) toggleIcon.textContent = _tocCollapsed ? '▶' : '▼';
+  });
+
+  tocWrap.appendChild(header);
+  tocWrap.appendChild(body);
+
+  const previewArea = $('previewArea');
+  if(previewArea && targetEl === $('previewMd')){
+    previewArea.appendChild(tocWrap);
+  } else if(targetEl.parentNode){
+    targetEl.parentNode.insertBefore(tocWrap, targetEl);
+  }
+
+  // Active heading spy on scroll
+  const scrollContainer = targetEl;
+  if(scrollContainer && headingElements.length > 0){
+    const onScroll = () => {
+      let activeIndex = 0;
+      const topOffset = scrollContainer.scrollTop + 40;
+      for(let i = 0; i < headingElements.length; i++){
+        if(headingElements[i].offsetTop <= topOffset){
+          activeIndex = i;
+        } else {
+          break;
+        }
+      }
+      const links = body.querySelectorAll('.preview-toc-item');
+      links.forEach((l, i) => {
+        if(i === activeIndex) l.classList.add('active');
+        else l.classList.remove('active');
+      });
+    };
+    if(targetEl._tocScrollHandler){
+      scrollContainer.removeEventListener('scroll', targetEl._tocScrollHandler);
+    }
+    targetEl._tocScrollHandler = onScroll;
+    scrollContainer.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  }
+}
+window._buildMarkdownToc = _buildMarkdownToc;
+
+/* ==========================================================================
+   AlurKerja BPMN Compliance Audit & PostgreSQL DDL Generator
+   ========================================================================== */
+let _currentAlurkerjaDdl = '';
+
+function _toSnakeCase(str){
+  return (str || '').replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/(^_|_$)/g, '');
+}
+
+async function bpmnAuditAlurkerja(){
+  let xml = _previewRawContent || '';
+  if(!xml && _bpmnViewerInstance){
+    try {
+      const res = await _bpmnViewerInstance.saveXML({ format: true });
+      xml = res.xml;
+    } catch(e){}
+  }
+  if(!xml){
+    if(typeof showToast==='function') showToast('No BPMN XML content found to audit.', 3000, 'warning');
+    return;
+  }
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, 'application/xml');
+  if(doc.querySelector('parsererror')){
+    if(typeof showToast==='function') showToast('Invalid BPMN XML syntax.', 3000, 'error');
+    return;
+  }
+
+  const checks = [];
+  let passCount = 0;
+
+  // 1. Participant / Pool Check
+  const participants = Array.from(doc.querySelectorAll('participant, bpmn\\:participant'));
+  if(participants.length === 0){
+    checks.push({
+      rule: '1. Participant / Pool',
+      status: 'warn',
+      title: 'Pool Participant Tidak Ditemukan',
+      detail: 'Diagram tidak memiliki Pool terdefinisi. Standar Javan AlurKerja mewajibkan Pool Participant mewakili organisasi (misal: "PT Javan Cipta Solusi").'
+    });
+  } else {
+    let poolPassed = true;
+    let poolMessages = [];
+    participants.forEach(p => {
+      const name = (p.getAttribute('name') || '').trim();
+      if(!name){
+        poolPassed = false;
+        poolMessages.push(`Pool ID "${p.getAttribute('id')}" tidak memiliki nama.`);
+      } else if(/\b(alur|proses|flow|workflow)\b/i.test(name)){
+        poolPassed = false;
+        poolMessages.push(`Nama Pool "${name}" mengandung kata alur/proses. Standar Javan: Pool wajib nama Organisasi/Peserta (contoh: "PT Javan Cipta Solusi"), bukan nama proses.`);
+      }
+    });
+    if(poolPassed){
+      passCount++;
+      checks.push({
+        rule: '1. Participant / Pool',
+        status: 'pass',
+        title: 'Pool Participant Valid',
+        detail: `Nama Pool: "${participants[0].getAttribute('name')}" (Representasi Organisasi/Peserta).`
+      });
+    } else {
+      checks.push({
+        rule: '1. Participant / Pool',
+        status: 'fail',
+        title: 'Pelanggaran Penamaan Pool',
+        detail: poolMessages.join(' ')
+      });
+    }
+  }
+
+  // 2. Process Definition Key & File Match Check
+  const processes = Array.from(doc.querySelectorAll('process, bpmn\\:process'));
+  const processEl = processes[0];
+  const processId = processEl ? processEl.getAttribute('id') : '';
+  const currentFileName = (_previewCurrentPath || '').split('/').pop() || '';
+  const expectedFileName = (processId || '') + '.bpmn';
+
+  if(!processId){
+    checks.push({
+      rule: '2. Process Definition Key',
+      status: 'fail',
+      title: 'Process Definition Key Kosong',
+      detail: 'Elemen <bpmn:process> tidak memiliki atribut ID.'
+    });
+  } else {
+    const isTitleCase = /^[A-Z][a-zA-Z0-9]*$/.test(processId);
+    const fileMatches = currentFileName === expectedFileName || currentFileName.toLowerCase() === expectedFileName.toLowerCase();
+    if(isTitleCase && fileMatches){
+      passCount++;
+      checks.push({
+        rule: '2. Process Definition Key',
+        status: 'pass',
+        title: `Process ID "${processId}" Valid (TitleCase)`,
+        detail: `Format ID TitleCase dan nama file "${currentFileName}" sesuai Process Definition Key.`
+      });
+    } else {
+      let issues = [];
+      if(!isTitleCase) issues.push(`Process ID "${processId}" harus TitleCase (contoh: "LeaveApproval").`);
+      if(!fileMatches) issues.push(`Nama file "${currentFileName}" sebaiknya sama dengan Process ID "${expectedFileName}".`);
+      checks.push({
+        rule: '2. Process Definition Key',
+        status: isTitleCase ? 'warn' : 'fail',
+        title: 'Process Key / File Naming Perlu Disesuaikan',
+        detail: issues.join(' ')
+      });
+    }
+  }
+
+  // 3. Lane IDs Check (UPPERCASE)
+  const lanes = Array.from(doc.querySelectorAll('lane, bpmn\\:lane'));
+  if(lanes.length === 0){
+    checks.push({
+      rule: '3. Lane Role & ID',
+      status: 'warn',
+      title: 'Lane Tidak Didefinisikan',
+      detail: 'Diagram tidak memiliki Lane pemisah role. Gunakan Lane untuk mengelompokkan role aktor (ID wajib UPPERCASE).'
+    });
+  } else {
+    let lanePassed = true;
+    let badLanes = [];
+    lanes.forEach(l => {
+      const id = l.getAttribute('id') || '';
+      if(!/^[A-Z0-9_]+$/.test(id)){
+        lanePassed = false;
+        badLanes.push(`ID "${id}" (Nama: "${l.getAttribute('name')||''}")`);
+      }
+    });
+    if(lanePassed){
+      passCount++;
+      checks.push({
+        rule: '3. Lane Role & ID',
+        status: 'pass',
+        title: `Seluruh Lane ID Valid (${lanes.length} Lanes)`,
+        detail: lanes.map(l => l.getAttribute('id')).join(', ') + ' (Format UPPERCASE).'
+      });
+    } else {
+      checks.push({
+        rule: '3. Lane Role & ID',
+        status: 'fail',
+        title: 'Format ID Lane Tidak UPPERCASE',
+        detail: `Standar Javan mewajibkan ID Lane berformat UPPERCASE (contoh: DIVISI_HR, SATGAS_PENYELIDIKAN). Pelanggaran: ${badLanes.join(', ')}.`
+      });
+    }
+  }
+
+  // 4. User Tasks & Form Field Metadata Check
+  const userTasks = Array.from(doc.querySelectorAll('userTask, bpmn\\:userTask'));
+  if(userTasks.length === 0){
+    checks.push({
+      rule: '4. User Task & Form Fields',
+      status: 'warn',
+      title: 'Tidak Ada User Task',
+      detail: 'Diagram tidak memuat User Task.'
+    });
+  } else {
+    let tasksPassed = true;
+    let formMetadataFound = 0;
+    let nonCamelTasks = [];
+    userTasks.forEach(ut => {
+      const id = ut.getAttribute('id') || '';
+      if(!/^[a-z][a-zA-Z0-9]*$/.test(id)){
+        tasksPassed = false;
+        nonCamelTasks.push(id);
+      }
+      const formFields = ut.querySelectorAll('formField, camunda\\:formField');
+      if(formFields.length > 0) formMetadataFound++;
+    });
+
+    if(tasksPassed && formMetadataFound > 0){
+      passCount++;
+      checks.push({
+        rule: '4. User Task & Form Fields',
+        status: 'pass',
+        title: `User Task (${userTasks.length}) & Form Fields Lengkap`,
+        detail: `Seluruh task ID camelCase dan memiliki metadata form fields (<camunda:formField>) untuk generate form AlurKerja.`
+      });
+    } else if(tasksPassed && formMetadataFound === 0){
+      checks.push({
+        rule: '4. User Task & Form Fields',
+        status: 'warn',
+        title: `Task ID camelCase, Namun Form Fields Kosong (${userTasks.length} Task)`,
+        detail: 'Task definition key sudah camelCase, namun belum memiliki <camunda:formData> dan <camunda:formField>. Tambahkan field agar dapat digenerate form dan disimulasikan di Camunda.'
+      });
+    } else {
+      checks.push({
+        rule: '4. User Task & Form Fields',
+        status: 'fail',
+        title: 'Task ID Bukan camelCase',
+        detail: `Standar AlurKerja mewajibkan taskDefinitionKey berformat camelCase (contoh: reviewCuti, headApproval). Pelanggaran: ${nonCamelTasks.join(', ')}.`
+      });
+    }
+  }
+
+  // 5. Gateways & Decision Condition Expression Check
+  const gateways = Array.from(doc.querySelectorAll('exclusiveGateway, bpmn\\:exclusiveGateway, inclusiveGateway, bpmn\\:inclusiveGateway'));
+  const sequenceFlows = Array.from(doc.querySelectorAll('sequenceFlow, bpmn\\:sequenceFlow'));
+  let gwPassed = true;
+  let gwIssues = [];
+
+  gateways.forEach(gw => {
+    const outgoing = Array.from(gw.querySelectorAll('outgoing, bpmn\\:outgoing'));
+    const name = (gw.getAttribute('name') || '').trim();
+    if(outgoing.length > 1){
+      if(!name.endsWith('?')){
+        gwPassed = false;
+        gwIssues.push(`Gateway "${gw.getAttribute('id')}" keluar cabang tapi namanya tidak berakhir tanda tanya ("?").`);
+      }
+    }
+  });
+
+  let validDecisions = 0;
+  let booleanExpressions = 0;
+  sequenceFlows.forEach(sf => {
+    const expr = (sf.textContent || '').trim();
+    if(expr.includes('${') && expr.includes('}')){
+      if(/\b(true|false)\b/i.test(expr)){
+        booleanExpressions++;
+      } else if(/\$\{[a-zA-Z0-9_\-]+\s*==\s*"[^"]+"\}/.test(expr)){
+        validDecisions++;
+      }
+    }
+  });
+
+  if(booleanExpressions > 0){
+    gwPassed = false;
+    gwIssues.push(`Ditemukan ${booleanExpressions} condition expression menggunakan boolean. Standar Javan: Wajib menggunakan string kebab-case, contoh: \${approval-admin=="terima"}.`);
+  }
+
+  if(gwPassed && (gateways.length === 0 || validDecisions > 0)){
+    passCount++;
+    checks.push({
+      rule: '5. Gateway & Decision Expressions',
+      status: 'pass',
+      title: 'Gateway & Decision Condition Sesuai Standar',
+      detail: `Pertanyaan interogatif pada diverging gateway terkonfirmasi dan condition expression menggunakan format string context.`
+    });
+  } else {
+    checks.push({
+      rule: '5. Gateway & Decision Expressions',
+      status: gwIssues.length > 0 ? 'warn' : 'pass',
+      title: gwIssues.length > 0 ? 'Catatan Gateway / Decision' : 'Gateway Valid',
+      detail: gwIssues.length > 0 ? gwIssues.join(' ') : 'Gateway valid.'
+    });
+    if(gwIssues.length === 0) passCount++;
+  }
+
+  // 6. Database DDL Generator for AlurKerja
+  const processTableName = _toSnakeCase(processId || 'process_instance');
+  let ddl = `-- ==========================================================\n`;
+  ddl += `-- ALURKERJA POSTGRESQL DDL (PT Javan Cipta Solusi)\n`;
+  ddl += `-- Generated from: ${currentFileName || 'Process'}\n`;
+  ddl += `-- Simulation on: merapi.javan.id:55432 / Nocode Apps\n`;
+  ddl += `-- ==========================================================\n\n`;
+
+  ddl += `-- 1. Process Instance Table (1 BPMN = 1 Tabel Utama)\n`;
+  ddl += `CREATE TABLE IF NOT EXISTS ${processTableName} (\n`;
+  ddl += `    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n`;
+  ddl += `    process_instance_id VARCHAR(255) NOT NULL,\n`;
+
+  const startEvent = doc.querySelector('startEvent, bpmn\\:startEvent');
+  if(startEvent){
+    const startFields = Array.from(startEvent.querySelectorAll('formField, camunda\\:formField'));
+    startFields.forEach(f => {
+      const fid = _toSnakeCase(f.getAttribute('id') || 'field');
+      const ftype = (f.getAttribute('type') || '').toLowerCase();
+      const colType = ftype === 'date' ? 'DATE' : (ftype === 'long' || ftype === 'integer') ? 'BIGINT' : 'VARCHAR(255)';
+      ddl += `    ${fid} ${colType},\n`;
+    });
+  }
+
+  ddl += `    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n`;
+  ddl += `    created_by UUID,\n`;
+  ddl += `    updated_at TIMESTAMP,\n`;
+  ddl += `    updated_by UUID,\n`;
+  ddl += `    deleted_by UUID\n`;
+  ddl += `);\n\n`;
+
+  // 2. User Task Tables
+  ddl += `-- 2. User Task Tables (1 User Task = 1 Tabel Tersendiri)\n`;
+  userTasks.forEach((ut, idx) => {
+    const utId = ut.getAttribute('id') || `task_${idx+1}`;
+    const utTable = `${processTableName}_${_toSnakeCase(utId)}`;
+    ddl += `CREATE TABLE IF NOT EXISTS ${utTable} (\n`;
+    ddl += `    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n`;
+    ddl += `    business_key UUID NOT NULL REFERENCES ${processTableName}(id) ON DELETE CASCADE,\n`;
+
+    const fields = Array.from(ut.querySelectorAll('formField, camunda\\:formField'));
+    fields.forEach(f => {
+      const fid = _toSnakeCase(f.getAttribute('id') || 'field');
+      const ftype = (f.getAttribute('type') || '').toLowerCase();
+      let colType = 'VARCHAR(255)';
+      if(ftype === 'date') colType = 'DATE';
+      else if(ftype === 'long' || ftype === 'integer') colType = 'BIGINT';
+      else if(ftype === 'enum') colType = 'VARCHAR(50)';
+      else if(ftype === 'boolean') colType = 'BOOLEAN';
+      ddl += `    ${fid} ${colType},\n`;
+    });
+
+    ddl += `    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n`;
+    ddl += `    created_by UUID,\n`;
+    ddl += `    updated_at TIMESTAMP,\n`;
+    ddl += `    updated_by UUID,\n`;
+    ddl += `    deleted_by UUID\n`;
+    ddl += `);\n\n`;
+  });
+
+  _currentAlurkerjaDdl = ddl;
+  passCount++; // DDL ready
+
+  // Render UI into Modal
+  $('alurkerjaPassCount').textContent = passCount;
+  $('alurkerjaModalSubtitle').textContent = `Audited from: ${currentFileName} • Process ID: ${processId || '-'}`;
+
+  const rulesContent = $('alurkerjaTabContentRules');
+  rulesContent.innerHTML = '';
+
+  checks.forEach(c => {
+    const card = document.createElement('div');
+    card.className = 'alurkerja-audit-item ' + c.status;
+    const icon = c.status === 'pass' ? '✅' : c.status === 'warn' ? '⚠️' : '❌';
+    card.innerHTML = `
+      <div class="alurkerja-audit-item-head">
+        <span>${icon} ${c.rule}: ${c.title}</span>
+        <span style="font-size:10px;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:var(--hover-bg);">${c.status}</span>
+      </div>
+      <div class="alurkerja-audit-item-detail">${c.detail}</div>
+    `;
+    rulesContent.appendChild(card);
+  });
+
+  $('alurkerjaSqlCode').textContent = ddl;
+  switchAlurkerjaTab('rules');
+  $('alurkerjaAuditModal').style.display = 'flex';
+}
+
+function closeAlurkerjaAuditModal(){
+  const modal = $('alurkerjaAuditModal');
+  if(modal) modal.style.display = 'none';
+}
+
+function switchAlurkerjaTab(tab){
+  const btnRules = $('btnTabAuditRules');
+  const btnDdl = $('btnTabAuditDdl');
+  const paneRules = $('alurkerjaTabContentRules');
+  const paneDdl = $('alurkerjaTabContentDdl');
+
+  if(tab === 'rules'){
+    if(btnRules) btnRules.classList.add('active');
+    if(btnDdl) btnDdl.classList.remove('active');
+    if(paneRules) paneRules.style.display = 'block';
+    if(paneDdl) paneDdl.style.display = 'none';
+  } else {
+    if(btnRules) btnRules.classList.remove('active');
+    if(btnDdl) btnDdl.classList.add('active');
+    if(paneRules) paneRules.style.display = 'none';
+    if(paneDdl) paneDdl.style.display = 'block';
+  }
+}
+
+async function copyAlurkerjaDdl(){
+  if(!_currentAlurkerjaDdl) return;
+  try {
+    await navigator.clipboard.writeText(_currentAlurkerjaDdl);
+    if(typeof showToast==='function') showToast('PostgreSQL DDL copied to clipboard! 📋');
+  } catch(e){
+    if(typeof showToast==='function') showToast('Failed to copy DDL', 3000, 'error');
+  }
+}
+
+window.bpmnAuditAlurkerja = bpmnAuditAlurkerja;
+window.closeAlurkerjaAuditModal = closeAlurkerjaAuditModal;
+window.switchAlurkerjaTab = switchAlurkerjaTab;
+window.copyAlurkerjaDdl = copyAlurkerjaDdl;
+window.openPreviewInGoogleDrive = openPreviewInGoogleDrive;
+window.copyDriveLink = copyDriveLink;
+
 
 
