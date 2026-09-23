@@ -7587,6 +7587,50 @@ function _stripVisibleAssistantEchoFromThinking(thinkingText, ...visibleTexts){
   return clean;
 }
 
+function _injectWorkspaceFileButtons(html){
+  if(!html) return html;
+  const ws = (typeof S!=='undefined' && S && S.session && S.session.workspace)
+    || (typeof S!=='undefined' && S && S._profileDefaultWorkspace)
+    || '/home/ubuntu/hermes_artifacts';
+  const normWs = ws ? ws.replace(/\/+$/, '') : '';
+  const extPattern = 'png|jpe?g|gif|webp|svg|html?|csv|json|md|bpmn|pdf|txt|py|js|ts|ya?ml|xml';
+
+  // 1. Process inline <code> tags that contain a file path
+  const codeStash = [];
+  const codeRegex = new RegExp(`<code\\b([^>]*)>([^\\s<>]+\\.(?:${extPattern}))<\\/code>`, 'gi');
+  html = html.replace(codeRegex, (m, attrs, p) => {
+    let rel = p.trim();
+    if (normWs && rel.startsWith(normWs + '/')) {
+      rel = rel.slice(normWs.length + 1);
+    }
+    rel = rel.replace(/^~\//, '').replace(/^\.\//, '');
+    const replacement = `<code${attrs}>${p}</code> <a href="#workspace=${encodeURIComponent(rel)}" class="workspace-open-btn" onclick="event.stopPropagation()">Buka di Panel</a>`;
+    codeStash.push(replacement);
+    return `\x00WS_CODE_${codeStash.length - 1}\x00`;
+  });
+
+  // Stash any other existing <code> tags so bare path regex never touches them
+  html = html.replace(/<code\b[^>]*>[\s\S]*?<\/code>/gi, (m) => {
+    codeStash.push(m);
+    return `\x00WS_CODE_${codeStash.length - 1}\x00`;
+  });
+
+  // 2. Bare absolute paths starting with workspace root outside tags or links
+  if (normWs) {
+    const escapedWs = normWs.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const bareRegex = new RegExp(`(?<!["'=\\/])(${escapedWs}\\/[a-zA-Z0-9_\\-\\.\\/]+\\.(?:${extPattern}))(?![^<]*>|\\s*<a[^>]*class="workspace-open-btn")`, 'gi');
+    html = html.replace(bareRegex, (m, p) => {
+      let rel = p.slice(normWs.length + 1);
+      return `<code class="workspace-file-path">${p}</code> <a href="#workspace=${encodeURIComponent(rel)}" class="workspace-open-btn" onclick="event.stopPropagation()">Buka di Panel</a>`;
+    });
+  }
+
+  // 3. Restore stashed <code> tags
+  html = html.replace(/\x00WS_CODE_(\d+)\x00/g, (_, i) => codeStash[+i]);
+
+  return html;
+}
+
 function renderMd(raw){
   let s=(raw||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
   // ── Entity decode: must run FIRST so &gt; lines become > for the blockquote
@@ -7814,6 +7858,16 @@ function renderMd(raw){
   // Inline backtick spans: restore <code> tags produced in the stash callback above.
   // Must happen BEFORE bold/italic so **`code`** → <strong><code>code</code></strong>.
   s=s.replace(/\x00F(\d+)\x00/g,(_,i)=>fence_stash[+i]);
+  // Helper: escape plain text while preserving safe inline tags produced by earlier markdown passes.
+  function _escPreservingTags(str){
+    if(!str) return '';
+    const _tstash=[];
+    const tokenized=String(str).replace(/<\/?(?:strong|em|del|code|a|img|br)(?:\s+[^>]*)?>/gi,tag=>{
+      _tstash.push(tag);
+      return `\x00Z${_tstash.length-1}\x00`;
+    });
+    return esc(tokenized).replace(/\x00Z(\d+)\x00/g,(_,i)=>_tstash[+i]);
+  }
   // inlineMd: process bold/italic/code/links within a single line of text.
   // Used inside list items and blockquotes where the text may already contain
   // HTML from the pre-pass → bold pipeline, so we cannot call esc() directly.
@@ -7821,11 +7875,11 @@ function renderMd(raw){
     // Stash backtick code spans first so bold/italic never esc() their content
     const _code_stash=[];
     t=t.replace(/`([^`\n]+)`/g,(_,x)=>{_code_stash.push(`<code>${esc(x)}</code>`);return `\x00C${_code_stash.length-1}\x00`;});
-    t=t.replace(/\*\*\*(.+?)\*\*\*/g,(_,x)=>`<strong><em>${esc(x)}</em></strong>`);
-    t=t.replace(/\*\*(.+?)\*\*/g,(_,x)=>`<strong>${esc(x)}</strong>`);
-    t=t.replace(/\*([^\s*](?:[^*\n]*?[^\s*])?)\*/g,(_,x)=>`<em>${esc(x)}</em>`);
+    t=t.replace(/\*\*\*(.+?)\*\*\*/g,(_,x)=>`<strong><em>${_escPreservingTags(x)}</em></strong>`);
+    t=t.replace(/\*\*(.+?)\*\*/g,(_,x)=>`<strong>${_escPreservingTags(x)}</strong>`);
+    t=t.replace(/\*([^\s*](?:[^*\n]*?[^\s*])?)\*/g,(_,x)=>`<em>${_escPreservingTags(x)}</em>`);
     // Strikethrough: ~~text~~ → <del>text</del>
-    t=t.replace(/~~(.+?)~~/g,(_,x)=>`<del>${esc(x)}</del>`);
+    t=t.replace(/~~(.+?)~~/g,(_,x)=>`<del>${_escPreservingTags(x)}</del>`);
     // #487: Image pass — runs while code stash is active so ![x](url) inside
     // backticks stays protected as a \x00C token and is never rendered as <img>.
     // Must run before _code_stash restore and before _link_stash so the image
@@ -7851,10 +7905,10 @@ function renderMd(raw){
   // regexes don't esc() their content (e.g. **`code`** → <strong><code>code</code></strong>)
   const _ob_stash=[];
   s=s.replace(/(<code\b[^>]*>[\s\S]*?<\/code>)/g,m=>{_ob_stash.push(m);return `\x00O${_ob_stash.length-1}\x00`;});
-  s=s.replace(/\*\*\*(.+?)\*\*\*/g,(_,t)=>`<strong><em>${esc(t)}</em></strong>`);
-  s=s.replace(/\*\*(.+?)\*\*/g,(_,t)=>`<strong>${esc(t)}</strong>`);
-  s=s.replace(/\*([^\s*](?:[^*\n]*?[^\s*])?)\*/g,(_,t)=>`<em>${esc(t)}</em>`);
-  s=s.replace(/~~(.+?)~~/g,(_,t)=>`<del>${esc(t)}</del>`);
+  s=s.replace(/\*\*\*(.+?)\*\*\*/g,(_,t)=>`<strong><em>${_escPreservingTags(t)}</em></strong>`);
+  s=s.replace(/\*\*(.+?)\*\*/g,(_,t)=>`<strong>${_escPreservingTags(t)}</strong>`);
+  s=s.replace(/\*([^\s*](?:[^*\n]*?[^\s*])?)\*/g,(_,t)=>`<em>${_escPreservingTags(t)}</em>`);
+  s=s.replace(/~~(.+?)~~/g,(_,t)=>`<del>${_escPreservingTags(t)}</del>`);
   s=s.replace(/\x00O(\d+)\x00/g,(_,i)=>_ob_stash[+i]);
   s=s.replace(/^###### (.+)$/gm,(_,t)=>`<h6>${inlineMd(t)}</h6>`).replace(/^##### (.+)$/gm,(_,t)=>`<h5>${inlineMd(t)}</h5>`).replace(/^#### (.+)$/gm,(_,t)=>`<h4>${inlineMd(t)}</h4>`).replace(/^### (.+)$/gm,(_,t)=>`<h3>${inlineMd(t)}</h3>`).replace(/^## (.+)$/gm,(_,t)=>`<h2>${inlineMd(t)}</h2>`).replace(/^# (.+)$/gm,(_,t)=>`<h1>${inlineMd(t)}</h1>`);
   s=s.replace(/^---+$/gm,'<hr>');
@@ -8228,6 +8282,7 @@ function renderMd(raw){
   });
   const parts=s.split(/\n{2,}/);
   s=parts.map(p=>{p=p.trim();if(!p)return '';if(/^<(h[1-6]|ul|ol|table|pre|hr|blockquote)|^\x00[EQ]/.test(p))return p;return `<p>${p.replace(/\n/g,'<br>')}</p>`;}).join('\n');
+  s=_injectWorkspaceFileButtons(s);
   s=s.replace(/\x00E(\d+)\x00/g,(_,i)=>_pre_stash[+i]);
   // ── Restore MEDIA stash → inline images or download links ─────────────────
   s=s.replace(/\x00D(\d+)\x00/g,(_,i)=>_inlineMediaHtmlForRef(media_stash[+i]));
@@ -11150,9 +11205,9 @@ function syncTopbar(){
     if(typeof syncAppTitlebar==='function') syncAppTitlebar();
     // Update profile chip even when no session is active (e.g. right after profile switch)
     const _profileLabel=$('profileChipLabel');
-    if(_profileLabel) _profileLabel.textContent=S.activeProfile||'default';
+    if(_profileLabel) _profileLabel.textContent=(typeof getProfileDisplayName==='function'?getProfileDisplayName(S.activeProfile):S.activeProfile)||'default';
     const _titleLabel=$('titlebarProfileLabel');
-    if(_titleLabel) _titleLabel.textContent=S.activeProfile||'default';
+    if(_titleLabel) _titleLabel.textContent=(typeof getProfileDisplayName==='function'?getProfileDisplayName(S.activeProfile):S.activeProfile)||'default';
     return;
   }
   const sessionTitle=S.session.title||t('untitled');
@@ -11277,9 +11332,9 @@ function syncTopbar(){
   // scoping project/session operations to the session's own profile — is
   // unaffected by this line.
   const profileLabel=$('profileChipLabel');
-  if(profileLabel) profileLabel.textContent=S.activeProfile||'default';
+  if(profileLabel) profileLabel.textContent=(typeof getProfileDisplayName==='function'?getProfileDisplayName(S.activeProfile):S.activeProfile)||'default';
   const titleLabel=$('titlebarProfileLabel');
-  if(titleLabel) titleLabel.textContent=S.activeProfile||'default';
+  if(titleLabel) titleLabel.textContent=(typeof getProfileDisplayName==='function'?getProfileDisplayName(S.activeProfile):S.activeProfile)||'default';
 }
 
 function msgContent(m){
