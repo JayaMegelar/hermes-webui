@@ -392,7 +392,17 @@ function _syncMobileSidebarPanelFromMainView(){
 }
 
 async function switchPanel(name, opts = {}) {
-  const nextPanel = name || 'chat';
+  let requestedPanel = name || 'chat';
+  let studioSubMode = null;
+  if (requestedPanel === 'studio-prd') {
+    requestedPanel = 'studio';
+    studioSubMode = 'prd';
+  } else if (requestedPanel === 'studio-bpmn') {
+    requestedPanel = 'studio';
+    studioSubMode = 'flow';
+  }
+
+  const nextPanel = requestedPanel;
   const prevPanel = _currentPanel;
 
   // Auto-dismiss Product Studio when switching to any standard panel
@@ -441,7 +451,19 @@ async function switchPanel(name, opts = {}) {
     }
   }
   // Update nav tabs (rail + mobile sidebar-nav share data-panel)
-  document.querySelectorAll('[data-panel]').forEach(t => t.classList.toggle('active', t.dataset.panel === nextPanel));
+  document.querySelectorAll('[data-panel]').forEach(t => {
+    if (t.dataset.panel === 'studio-prd') {
+      const isStudio = nextPanel === 'studio';
+      const curLayout = studioSubMode || (typeof _getStudioLayout === 'function' ? _getStudioLayout() : 'prd');
+      t.classList.toggle('active', isStudio && curLayout === 'prd');
+    } else if (t.dataset.panel === 'studio-bpmn') {
+      const isStudio = nextPanel === 'studio';
+      const curLayout = studioSubMode || (typeof _getStudioLayout === 'function' ? _getStudioLayout() : 'prd');
+      t.classList.toggle('active', isStudio && curLayout === 'flow');
+    } else {
+      t.classList.toggle('active', t.dataset.panel === nextPanel);
+    }
+  });
   // Refresh aria-expanded on the newly-active rail button to mirror sidebar state.
   if (typeof _syncSidebarAria === 'function') _syncSidebarAria();
   // Update panel views
@@ -463,7 +485,10 @@ async function switchPanel(name, opts = {}) {
   if (nextPanel === 'memory') await loadMemory();
   if (nextPanel === 'workspaces') await loadWorkspacesPanel();
   if (nextPanel === 'profiles') await loadProfilesPanel();
-  if (nextPanel === 'studio' && typeof initProductStudio === 'function') await initProductStudio();
+  if (nextPanel === 'studio') {
+    if (typeof initProductStudio === 'function') await initProductStudio();
+    if (studioSubMode && typeof setStudioLayout === 'function') setStudioLayout(studioSubMode);
+  }
   if (nextPanel === 'todos') loadTodos();
   if (nextPanel === 'insights') await loadInsights();
   if (nextPanel === 'logs') await loadLogs();
@@ -6491,11 +6516,31 @@ async function switchToWorkspace(path,name){
 let _profilesCache = null;
 let _profileDropdownFetchPromise = null;
 let _profileDropdownCacheLoadedFromStorage = false;
-const PROFILE_DROPDOWN_CACHE_KEY = 'hermes-webui-profile-dropdown-cache-v1';
+const PROFILE_DROPDOWN_CACHE_KEY = 'hermes-webui-profile-dropdown-cache-v2';
 const PROFILE_DROPDOWN_CACHE_TTL_MS = 5 * 60 * 1000;
 let _profileSwitchGeneration = 0;
 let _profileDropdownTrigger = null;  // tracks which element triggered the dropdown
 let _profileDropdownOpenGeneration = 0;
+
+function getProfileDisplayName(name) {
+  if (!name) return 'default';
+  const cache = _profilesCache || (typeof window !== 'undefined' && window._profilesCache);
+  if (cache && Array.isArray(cache.profiles)) {
+    const p = cache.profiles.find(x => x && x.name === name);
+    if (p && p.display_name && p.display_name.trim()) return p.display_name.trim();
+  }
+  return name;
+}
+if (typeof window !== 'undefined') window.getProfileDisplayName = getProfileDisplayName;
+
+function _updateProfileChipsFromCache() {
+  const activeName = (typeof S !== 'undefined' && S && S.activeProfile) ? S.activeProfile : (_profilesCache && _profilesCache.active) || 'default';
+  const display = getProfileDisplayName(activeName);
+  const chip = typeof $ === 'function' ? $('profileChipLabel') : null;
+  if (chip) chip.textContent = display;
+  const tbl = typeof $ === 'function' ? $('titlebarProfileLabel') : null;
+  if (tbl) tbl.textContent = display;
+}
 
 function _profileDropdownClearStoredCache(){
   try{localStorage.removeItem(PROFILE_DROPDOWN_CACHE_KEY);}catch(_){}
@@ -6534,6 +6579,8 @@ function _profileDropdownReadStoredCache(){
     if(Date.now()-parsed.ts>PROFILE_DROPDOWN_CACHE_TTL_MS) { _profileDropdownClearStoredCache(); return null; }
     if(!_profileDropdownCacheUsable(parsed.data)) { _profileDropdownClearStoredCache(); return null; }
     _profilesCache = parsed.data;
+    if (typeof window !== 'undefined') window._profilesCache = _profilesCache;
+    _updateProfileChipsFromCache();
     return _profilesCache;
   }catch(_){_profileDropdownClearStoredCache();return null;}
 }
@@ -6554,6 +6601,8 @@ function _profileDropdownFetchFresh(){
   if(_profileDropdownFetchPromise) return _profileDropdownFetchPromise;
   _profileDropdownFetchPromise = api('/api/profiles', {timeoutToast:false}).then(data=>{
     if(_profileDropdownDataCacheUsable(data)) _profilesCache = data;
+    if(_profilesCache && typeof window !== 'undefined') window._profilesCache = _profilesCache;
+    _updateProfileChipsFromCache();
     _profileDropdownWriteStoredCache(data);
     return data;
   }).finally(()=>{ _profileDropdownFetchPromise = null; });
@@ -6649,6 +6698,8 @@ async function loadProfilesPanel() {
   try {
     const data = await api('/api/profiles');
     _profilesCache = data;
+    if (typeof window !== 'undefined') window._profilesCache = _profilesCache;
+    _updateProfileChipsFromCache();
     _profileDropdownWriteStoredCache(data);
     panel.innerHTML = '';
 
@@ -6699,10 +6750,14 @@ async function loadProfilesPanel() {
       const activeBadge = isActive ? `<span style="color:var(--link);font-size:10px;font-weight:600;margin-left:6px">${esc(t('profile_active'))}</span>` : '';
       const defaultBadge = p.is_default ? ` <span style="opacity:.5">${esc(t('profile_default_label'))}</span>` : '';
       const hiddenBadge = p.visible === false ? ' <span class="detail-badge" title="Hidden from chat">Hidden from chat</span>' : '';
+      const displayName = (p.display_name && p.display_name.trim()) ? p.display_name.trim() : p.name;
+      const secondaryName = (p.display_name && p.display_name.trim() && p.display_name.trim() !== p.name)
+        ? ` <span style="opacity:.6;font-size:11px;font-weight:400">(${esc(p.name)})</span>`
+        : '';
       card.innerHTML = `
         <div class="profile-card-header">
           <div style="min-width:0;flex:1">
-            <div class="profile-card-name${isActive ? ' is-active' : ''}">${gwDot}${esc(p.name)}${defaultBadge}${activeBadge}${hiddenBadge}</div>
+            <div class="profile-card-name${isActive ? ' is-active' : ''}">${gwDot}${esc(displayName)}${secondaryName}${defaultBadge}${activeBadge}${hiddenBadge}</div>
             ${meta.length ? `<div class="profile-card-meta">${esc(meta.join(' \u00b7 '))}</div>` : `<div class="profile-card-meta">${esc(t('profile_no_configuration'))}</div>`}
           </div>
         </div>`;
@@ -6750,7 +6805,9 @@ function _renderProfileDetail(p, activeName){
   const body = $('profileDetailBody');
   const empty = $('profileDetailEmpty');
   if (!title || !body) return;
-  title.textContent = p.name;
+  title.textContent = (p.display_name && p.display_name.trim() && p.display_name.trim() !== p.name)
+    ? `${p.display_name.trim()} (${p.name})`
+    : p.name;
   const isActive = p.name === activeName;
   const isDefault = !!p.is_default;
   const statusBadge = isActive
@@ -6874,7 +6931,11 @@ function renderProfileDropdown(data) {
     const gwDot = `<span class="profile-opt-badge ${p.gateway_running ? 'running' : 'stopped'}"></span>`;
     const checkmark = p.name === active ? ' <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--link)" stroke-width="3" style="vertical-align:-1px"><polyline points="20 6 9 17 4 12"/></svg>' : '';
     const defaultBadge = p.is_default ? ` <span style="opacity:.5;font-weight:400">${esc(t('profile_default_label'))}</span>` : '';
-    opt.innerHTML = `<div class="profile-opt-name">${gwDot}${esc(p.name)}${defaultBadge}${checkmark}</div>` +
+    const displayName = (p.display_name && p.display_name.trim()) ? p.display_name.trim() : p.name;
+    const secondaryName = (p.display_name && p.display_name.trim() && p.display_name.trim() !== p.name)
+      ? ` <span style="opacity:.6;font-size:11px;font-weight:400">(${esc(p.name)})</span>`
+      : '';
+    opt.innerHTML = `<div class="profile-opt-name">${gwDot}${esc(displayName)}${secondaryName}${defaultBadge}${checkmark}</div>` +
       (meta.length ? `<div class="profile-opt-meta">${esc(meta.join(' \u00b7 '))}</div>` : '');
     opt.onclick = async () => {
       closeProfileDropdown();
@@ -6893,7 +6954,7 @@ function renderProfileDropdown(data) {
   }
   // Sync titlebar label to the resolved active profile
   const tbl = $('titlebarProfileLabel');
-  if (tbl) tbl.textContent = active;
+  if (tbl) tbl.textContent = getProfileDisplayName(active);
 }
 
 function toggleProfileDropdown(e) {
@@ -7010,8 +7071,9 @@ async function switchToProfile(name) {
   if (_chip) { _chip.classList.add('switching'); _chip.disabled = true; }
   if (_titlebarBtn) { _titlebarBtn.classList.add('switching'); _titlebarBtn.disabled = true; }
   // Optimistic name update — shows the target name right away
-  if (_chipLabel) _chipLabel.textContent = name;
-  if (_titlebarLabel) _titlebarLabel.textContent = name;
+  const optimisticName = getProfileDisplayName(name);
+  if (_chipLabel) _chipLabel.textContent = optimisticName;
+  if (_titlebarLabel) _titlebarLabel.textContent = optimisticName;
 
   // ── Clear stale content + show loading skeletons immediately (#4662) ───────
   // The conversation list and workspace tree still show the PREVIOUS profile's
@@ -7204,6 +7266,7 @@ async function switchToProfile(name) {
       // Keep topbar chips (workspace/profile) in sync after creating the
       // new profile-scoped session.
       syncTopbar();
+      _updateProfileChipsFromCache();
       // #4671: lift the embargo immediately before the switch-owned render — JS is
       // single-threaded so nothing interleaves between this clear and the call, making
       // this render the first allowed to paint the new profile's rows.
@@ -13079,6 +13142,20 @@ function _clearCronUnreadForJob(jobId){
 
 const _origSwitchPanel=switchPanel;
 switchPanel=async function(name,opts){ return _origSwitchPanel(name,opts); };
+
+async function openStudioPrdMode(opts = {}){
+  await switchPanel('studio-prd', opts);
+}
+async function openStudioBpmnMode(opts = {}){
+  await switchPanel('studio-bpmn', opts);
+}
+async function openStudioSplitMode(opts = {}){
+  if(_currentPanel !== 'studio') await switchPanel('studio', opts);
+  if(typeof setStudioLayout === 'function') setStudioLayout('split');
+}
+window.openStudioPrdMode = openStudioPrdMode;
+window.openStudioBpmnMode = openStudioBpmnMode;
+window.openStudioSplitMode = openStudioSplitMode;
 
 // Start polling on page load
 startCronPolling();

@@ -2360,12 +2360,32 @@ function setStudioLayout(layout){
   if(bSplit) bSplit.classList.toggle('active', valid === 'split');
   if(bFlow) bFlow.classList.toggle('active', valid === 'flow');
 
+  // Sync left navigation rail tabs if studio is current panel
+  const isStudioActive = document.querySelector('main.main')?.classList.contains('showing-studio');
+  if(isStudioActive){
+    const railPrd = document.querySelector('.rail [data-panel="studio-prd"]');
+    const railBpmn = document.querySelector('.rail [data-panel="studio-bpmn"]');
+    if(railPrd) railPrd.classList.toggle('active', valid === 'prd');
+    if(railBpmn) railBpmn.classList.toggle('active', valid === 'flow');
+
+    const mobPrd = document.querySelector('.sidebar-nav [data-panel="studio-prd"]');
+    const mobBpmn = document.querySelector('.sidebar-nav [data-panel="studio-bpmn"]');
+    if(mobPrd) mobPrd.classList.toggle('active', valid === 'prd');
+    if(mobBpmn) mobBpmn.classList.toggle('active', valid === 'flow');
+  }
+
   if(valid === 'flow' || valid === 'split'){
     setTimeout(() => {
       studioFitBpmn();
     }, 150);
   }
 }
+
+function _getStudioLayout(){
+  const studioView = $('mainStudio') || $('productStudioView');
+  return studioView ? (studioView.getAttribute('data-studio-layout') || 'prd') : 'prd';
+}
+window._getStudioLayout = _getStudioLayout;
 
 function toggleStudioPrdDiscussion(){
   const drawer = $('studioPrdDiscussDrawer');
@@ -2716,12 +2736,33 @@ function toggleStudioNav(){
 document.addEventListener('keydown', function(e){
   // Check if user is typing in an input or textarea
   const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
+  if(isTyping) return;
 
+  // Alt+1: PRD Studio (Full View)
+  if(e.altKey && e.key === '1'){
+    e.preventDefault();
+    if(typeof openStudioPrdMode === 'function') openStudioPrdMode();
+    return;
+  }
+  // Alt+2: BPMN Studio (Full Camunda Canvas)
+  if(e.altKey && e.key === '2'){
+    e.preventDefault();
+    if(typeof openStudioBpmnMode === 'function') openStudioBpmnMode();
+    return;
+  }
+  // Alt+3: Dual Cross-Audit (50:50 Split)
+  if(e.altKey && e.key === '3'){
+    e.preventDefault();
+    if(typeof openStudioSplitMode === 'function') openStudioSplitMode();
+    return;
+  }
+
+  // Alt+S: Toggles between Chat and Product Studio
   if((e.altKey && (e.key === 's' || e.key === 'S')) || (e.ctrlKey && e.shiftKey && (e.key === 'p' || e.key === 'P'))){
     e.preventDefault();
     if(typeof switchPanel === 'function'){
       const activeTab = document.querySelector('.rail-btn.active')?.dataset?.panel;
-      switchPanel(activeTab === 'studio' ? 'chat' : 'studio');
+      switchPanel((activeTab === 'studio' || activeTab === 'studio-prd' || activeTab === 'studio-bpmn') ? 'chat' : 'studio-prd');
     }
     return;
   }
@@ -3523,6 +3564,74 @@ async function studioAuditAlurkerja(){
   _previewRawContent = xml;
   bpmnAuditAlurkerja();
 }
+
+let _studioXmlViewActive = false;
+
+async function studioToggleRawXml(){
+  const container = $('studioBpmnContainer');
+  if(!container) return;
+
+  _studioXmlViewActive = !_studioXmlViewActive;
+  const btn = $('btnStudioToggleXml');
+  if(btn) btn.classList.toggle('active', _studioXmlViewActive);
+
+  let xmlBox = $('studioBpmnRawXmlBox');
+  if(_studioXmlViewActive){
+    let xml = '';
+    if(_studioBpmnViewerInstance){
+      try {
+        const res = await _studioBpmnViewerInstance.saveXML({ format: true });
+        xml = res.xml;
+      } catch(e){}
+    }
+    if(!xml && _studioCurrentBpmnPath){
+      try {
+        const data = await api(_workspaceRouteForPath(_studioCurrentBpmnPath, 'read'));
+        xml = data.content || '';
+      } catch(e){}
+    }
+    if(!xmlBox){
+      xmlBox = document.createElement('textarea');
+      xmlBox.id = 'studioBpmnRawXmlBox';
+      xmlBox.className = 'studio-xml-textarea';
+      xmlBox.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;background:var(--code-bg);color:var(--code-text);font-family:var(--font-mono);font-size:12px;padding:16px;border:none;resize:none;z-index:20;';
+      xmlBox.readOnly = true;
+      container.parentNode.appendChild(xmlBox);
+    }
+    xmlBox.value = xml;
+    xmlBox.style.display = 'block';
+  } else {
+    if(xmlBox) xmlBox.style.display = 'none';
+  }
+}
+
+async function studioQuickCopyDdl(){
+  let xml = '';
+  if(_studioBpmnViewerInstance){
+    try {
+      const res = await _studioBpmnViewerInstance.saveXML({ format: true });
+      xml = res.xml;
+    } catch(e){}
+  }
+  if(!xml && _studioCurrentBpmnPath){
+    try {
+      const data = await api(_workspaceRouteForPath(_studioCurrentBpmnPath, 'read'));
+      xml = data.content || '';
+    } catch(e){}
+  }
+  if(!xml){
+    if(typeof showToast==='function') showToast('No active BPMN to generate DDL', 3000, 'warning');
+    return;
+  }
+  _previewCurrentPath = _studioCurrentBpmnPath;
+  _previewRawContent = xml;
+  await bpmnAuditAlurkerja();
+  closeAlurkerjaAuditModal();
+  await copyAlurkerjaDdl();
+}
+
+window.studioToggleRawXml = studioToggleRawXml;
+window.studioQuickCopyDdl = studioQuickCopyDdl;
 
 function inspectStudioBpmnElement(el){
   const inspector = $('studioBpmnInspector');
