@@ -1963,6 +1963,22 @@ def _invalidate_list_profiles_cache() -> None:
         _LIST_PROFILES_CACHE = None
 
 
+def _profile_display_name_from_meta(profile_path: Path) -> str:
+    """Return presentation display_name from profile.yaml, or empty string."""
+    try:
+        meta_path = Path(profile_path) / 'profile.yaml'
+        if not meta_path.exists():
+            return ''
+        data = yaml.safe_load(meta_path.read_text(encoding='utf-8'))
+        if isinstance(data, dict):
+            val = data.get('display_name')
+            if isinstance(val, str):
+                return val.strip()
+    except Exception:
+        pass
+    return ''
+
+
 def _build_profile_rows_fast() -> list | None:
     """Build the profile list WITHOUT the upstream alias scan.
 
@@ -2004,8 +2020,10 @@ def _build_profile_rows_fast() -> list | None:
         except Exception:
             gateway_running = False
         enabled_count, total_count = _get_profile_skills_stats(home)
+        display_name = _profile_display_name_from_meta(home)
         return {
             'name': name,
+            'display_name': display_name,
             'path': str(home),
             'is_default': is_default,
             'is_active': False,  # filled in by caller (cheap, varies per request)
@@ -2074,6 +2092,7 @@ def list_profiles_api() -> list:
                     enabled_count, total_count = _get_profile_skills_stats(p.path)
                     return [{
                         'name': p.name,
+                        'display_name': _profile_display_name_from_meta(p.path),
                         'path': str(p.path),
                         'is_default': p.is_default,
                         'is_active': True,  # Always true in isolated mode
@@ -2092,6 +2111,7 @@ def list_profiles_api() -> list:
         enabled_count, total_count = _get_profile_skills_stats(hermes_home)
         return [{
             'name': active,
+            'display_name': _profile_display_name_from_meta(hermes_home),
             'path': str(hermes_home),
             'is_default': active == 'default',
             'is_active': True,
@@ -2139,6 +2159,7 @@ def list_profiles_api() -> list:
             enabled_count, total_count = _get_profile_skills_stats(p.path)
             result.append({
                 'name': p.name,
+                'display_name': _profile_display_name_from_meta(p.path),
                 'path': str(p.path),
                 'is_default': p.is_default,
                 'is_active': p.name == active,
@@ -2177,6 +2198,7 @@ def _default_profile_dict() -> dict:
     enabled_count, compatible_count = _get_profile_skills_stats(_DEFAULT_HERMES_HOME)
     return {
         'name': 'default',
+        'display_name': _profile_display_name_from_meta(_DEFAULT_HERMES_HOME),
         'path': str(_DEFAULT_HERMES_HOME),
         'is_default': True,
         'is_active': True,

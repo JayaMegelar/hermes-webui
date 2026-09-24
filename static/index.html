@@ -956,6 +956,47 @@
   background: rgba(16, 185, 129, 0.18);
   color: #6ee7b7;
 }
+.studio-inspector-tabs {
+  display: flex;
+  gap: 4px;
+  background: rgba(0,0,0,0.25);
+  padding: 3px;
+  border-radius: 6px;
+  width: fit-content;
+}
+.studio-inspector-tab-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.studio-inspector-tab-btn.active {
+  background: rgba(255,255,255,0.14);
+  color: #fff;
+  font-weight: 600;
+}
+.studio-view-card {
+  background: rgba(0,0,0,0.2);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.studio-view-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
 </style>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
   <!-- KaTeX math rendering CSS (loaded eagerly from vendored assets to prevent font CSP noise) -->
@@ -2765,6 +2806,10 @@
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 <span>Audit AlurKerja</span>
               </button>
+              <button class="studio-btn" id="btnStudioFormMatrix" onclick="openStudioFormMatrixModal()" style="color:#0ea5e9;font-weight:600;" title="Matriks Analisis Form AlurKerja 3-View (List, Detail, Submit)">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                <span>Matriks Form</span>
+              </button>
             </div>
           </div>
           <div id="studioBpmnContainer" style="flex:1;width:100%;height:100%;min-height:500px;"></div>
@@ -3085,6 +3130,28 @@
         <pre class="alurkerja-sql-pre" id="alurkerjaSqlCode"></pre>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- AlurKerja Form Matrix Modal (List, Detail, Submit) -->
+<div class="alurkerja-modal-overlay" id="alurkerjaFormMatrixModal" style="display:none;" onclick="if(event.target===this)closeAlurkerjaFormMatrixModal()">
+  <div class="alurkerja-modal-card" style="max-width:960px;" role="dialog" aria-modal="true" aria-labelledby="formMatrixModalTitle">
+    <div class="alurkerja-modal-header">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:20px;">📋</span>
+        <div>
+          <div style="font-weight:700;font-size:13.5px;" id="formMatrixModalTitle">Matriks Analisis Form AlurKerja (3-View)</div>
+          <div style="font-size:11px;color:var(--muted);">Standar Analisis &amp; Desain AlurKerja Javan: Halaman List, Detail, &amp; Submit Task</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="studio-btn" onclick="copyAlurkerjaFormMatrixMarkdown()" title="Salin seluruh matriks dalam format Markdown">📋 Salin Markdown</button>
+        <button class="studio-btn studio-btn-primary" onclick="syncAlurkerjaFormMatrixToPrd()" title="Sisipkan / perbarui section Matriks Form ke dokumen PRD aktif">📥 Sinkronkan ke PRD</button>
+        <button class="panel-icon-btn" onclick="closeAlurkerjaFormMatrixModal()" style="font-size:15px;padding:3px 8px;border-radius:4px;cursor:pointer;">✕</button>
+      </div>
+    </div>
+    <div class="alurkerja-modal-tabs" id="formMatrixTaskTabs"></div>
+    <div class="alurkerja-modal-body" id="formMatrixModalBody" style="display:flex;flex-direction:column;gap:14px;max-height:75vh;overflow-y:auto;"></div>
   </div>
 </div>
 

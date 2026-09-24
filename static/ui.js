@@ -8282,7 +8282,7 @@ function renderMd(raw){
   });
   const parts=s.split(/\n{2,}/);
   s=parts.map(p=>{p=p.trim();if(!p)return '';if(/^<(h[1-6]|ul|ol|table|pre|hr|blockquote)|^\x00[EQ]/.test(p))return p;return `<p>${p.replace(/\n/g,'<br>')}</p>`;}).join('\n');
-  s=_injectWorkspaceFileButtons(s);
+  if(typeof _injectWorkspaceFileButtons==='function') s=_injectWorkspaceFileButtons(s);
   s=s.replace(/\x00E(\d+)\x00/g,(_,i)=>_pre_stash[+i]);
   // ── Restore MEDIA stash → inline images or download links ─────────────────
   s=s.replace(/\x00D(\d+)\x00/g,(_,i)=>_inlineMediaHtmlForRef(media_stash[+i]));

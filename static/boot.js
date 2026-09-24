@@ -3622,9 +3622,9 @@ window._mirrorSpeechSettingsFromServer=_mirrorSpeechSettingsFromServer;
   applyBotName();
   // Update profile chip label immediately
   const profileLabel=$('profileChipLabel');
-  if(profileLabel) profileLabel.textContent=S.activeProfile||'default';
+  if(profileLabel) profileLabel.textContent=(typeof getProfileDisplayName==='function'?getProfileDisplayName(S.activeProfile):S.activeProfile)||'default';
   const titleLabel=$('titlebarProfileLabel');
-  if(titleLabel) titleLabel.textContent=S.activeProfile||'default';
+  if(titleLabel) titleLabel.textContent=(typeof getProfileDisplayName==='function'?getProfileDisplayName(S.activeProfile):S.activeProfile)||'default';
   const profileIntent=(typeof _profileQueryIntentFromLocation==='function')?_profileQueryIntentFromLocation():null;
   const _savedLocalBeforeProfileSwitch=localStorage.getItem('hermes-webui-session');
   const _profileSwitchProfileBefore=S.activeProfile||'default';

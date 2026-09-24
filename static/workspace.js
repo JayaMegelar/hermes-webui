@@ -3633,6 +3633,545 @@ async function studioQuickCopyDdl(){
 window.studioToggleRawXml = studioToggleRawXml;
 window.studioQuickCopyDdl = studioQuickCopyDdl;
 
+/* ==========================================================================
+   AlurKerja Reactive Form Matrix Suite (List, Detail, Submit) & Smart Inspector
+   ========================================================================== */
+
+let _activeFormMatrixData = null;
+let _currentInspectorTaskData = null;
+
+function _extractAlurkerjaFormMatrix(xml){
+  if(!xml) return null;
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, 'application/xml');
+  if(doc.querySelector('parsererror')) return null;
+
+  const processEl = doc.querySelector('process, bpmn\\:process');
+  const processId = processEl ? (processEl.getAttribute('id') || 'Process') : 'Process';
+  const processName = processEl ? (processEl.getAttribute('name') || processId) : processId;
+  const processTable = _toSnakeCase(processId);
+
+  // Lanes mapping
+  const laneMap = {};
+  const lanes = Array.from(doc.querySelectorAll('lane, bpmn\\:lane'));
+  lanes.forEach(lane => {
+    const laneName = (lane.getAttribute('name') || lane.getAttribute('id') || 'Actor').trim();
+    const refs = Array.from(lane.querySelectorAll('flowNodeRef, bpmn\\:flowNodeRef'));
+    refs.forEach(r => {
+      const refId = r.textContent.trim();
+      if(refId) laneMap[refId] = laneName;
+    });
+  });
+
+  // Flows mapping
+  const flowsBySource = {};
+  const seqFlows = Array.from(doc.querySelectorAll('sequenceFlow, bpmn\\:sequenceFlow'));
+  seqFlows.forEach(sf => {
+    const sfId = sf.getAttribute('id') || '';
+    const src = sf.getAttribute('sourceRef') || '';
+    const tgt = sf.getAttribute('targetRef') || '';
+    const name = sf.getAttribute('name') || sfId;
+    let cond = '';
+    const condEl = sf.querySelector('conditionExpression, bpmn\\:conditionExpression');
+    if(condEl && condEl.textContent) cond = condEl.textContent.trim();
+    if(!flowsBySource[src]) flowsBySource[src] = [];
+    flowsBySource[src].push({ id: sfId, src, tgt, name, cond });
+  });
+
+  // User tasks
+  const tasks = [];
+  const userTasks = Array.from(doc.querySelectorAll('userTask, bpmn\\:userTask'));
+  userTasks.forEach(ut => {
+    const taskId = ut.getAttribute('id') || '';
+    const taskName = ut.getAttribute('name') || taskId;
+    const lane = laneMap[taskId] || 'Actor';
+    const taskTable = `${processTable}_${_toSnakeCase(taskId)}`;
+
+    // Form fields
+    const fields = [];
+    const formFields = Array.from(ut.querySelectorAll('formField, camunda\\:formField'));
+    formFields.forEach(f => {
+      const fId = f.getAttribute('id') || '';
+      const fLabel = f.getAttribute('label') || fId;
+      const fType = f.getAttribute('type') || 'string';
+      let isViewOnly = false;
+      let isMandatory = false;
+      const props = Array.from(f.querySelectorAll('property, camunda\\:property'));
+      props.forEach(p => {
+        const pId = p.getAttribute('id') || '';
+        const pVal = p.getAttribute('value') || '';
+        if(pId === 'isViewOnly' && pVal === 'true') isViewOnly = true;
+        if(pId === 'isMandatory' && pVal === 'true') isMandatory = true;
+      });
+      fields.push({ id: fId, label: fLabel, type: fType, viewOnly: isViewOnly, mandatory: isMandatory });
+    });
+
+    // Decisions
+    const decisions = [];
+    const directFlows = flowsBySource[taskId] || [];
+    directFlows.forEach(df => {
+      if(df.cond){
+        decisions.push({ name: df.name, condition: df.cond, target: df.tgt });
+      } else if(flowsBySource[df.tgt]){
+        flowsBySource[df.tgt].forEach(gwFlow => {
+          decisions.push({ name: gwFlow.name, condition: gwFlow.cond, target: gwFlow.tgt });
+        });
+      }
+    });
+
+    // View breakdown
+    const viewOnlyFields = fields.filter(f => f.viewOnly);
+    const inputFields = fields.filter(f => !f.viewOnly);
+    const listCols = ['No', 'ID Tiket'];
+    if(viewOnlyFields.length > 0){
+      viewOnlyFields.slice(0, 3).forEach(f => listCols.push(f.label || f.id));
+    } else {
+      listCols.push('Nama Pemohon', 'Tanggal Pengajuan');
+    }
+    listCols.push('Status', 'Aksi');
+
+    tasks.push({
+      id: taskId,
+      name: taskName,
+      lane,
+      taskTable,
+      fields,
+      viewOnlyFields,
+      inputFields,
+      decisions,
+      listColumns: listCols
+    });
+  });
+
+  return {
+    processId,
+    processName,
+    processTable,
+    tasks
+  };
+}
+
+function _generateTaskMatrixMarkdown(task, processInfo){
+  let md = `### User Task: ${task.name} (\`${task.id}\`)\n`;
+  md += `- **Aktor / Lane**: ${task.lane}\n`;
+  md += `- **Tabel Basis Data**: \`${task.taskTable}\`\n\n`;
+
+  md += `#### A. Matriks Atribut Form\n`;
+  if(task.fields.length > 0){
+    md += `| Field ID | Label | Tipe Data | View Only | Mandatory | Keterangan |\n`;
+    md += `|---|---|---|---|---|---|\n`;
+    task.fields.forEach(f => {
+      const vo = f.viewOnly ? 'Ya' : 'Tidak';
+      const man = f.mandatory ? 'Ya' : 'Tidak';
+      const ket = f.viewOnly ? 'Read-only dari pemohon' : (f.type === 'enum' ? 'Variabel keputusan gateway' : 'Input data');
+      md += `| \`${f.id}\` | ${f.label} | ${f.type} | ${vo} | ${man} | ${ket} |\n`;
+    });
+  } else {
+    md += `*Belum ada atribut form terdefinisi untuk task ini.*\n`;
+  }
+  md += `\n`;
+
+  md += `#### B. Spesifikasi 3 Halaman AlurKerja\n`;
+  md += `1. **Halaman List (Index)**:\n`;
+  md += `   - **Antrean Tugas**: Menampilkan daftar antrean pengajuan pada status *${task.name}* untuk aktor *${task.lane}*.\n`;
+  md += `   - **Kolom Tabel**: ${task.listColumns.map(c => `\`${c}\``).join(', ')}.\n`;
+  md += `   - **Aksi Row**: \`[Lihat Detail]\` (ringkasan pengajuan) dan \`[Kerjakan / Proses]\` (buka form submit).\n`;
+  md += `2. **Halaman Detail**:\n`;
+  if(task.viewOnlyFields.length > 0){
+    md += `   - **Ringkasan Data Pengajuan (Read-Only)**: ${task.viewOnlyFields.map(f => `\`${f.label}\``).join(', ')}.\n`;
+  } else {
+    md += `   - **Ringkasan Data Pengajuan (Read-Only)**: Seluruh informasi pemohon ditampilkan secara lengkap.\n`;
+  }
+  md += `   - **Riwayat Status**: Timeline tracking alur dan log aktivitas sebelumnya.\n`;
+  md += `3. **Halaman Submit Task**:\n`;
+  if(task.inputFields.length > 0){
+    md += `   - **Komponen Input Form**: ${task.inputFields.map(f => `\`${f.label}\`${f.mandatory ? ' (*Wajib*)' : ''}`).join(', ')}.\n`;
+  } else {
+    md += `   - **Komponen Input Form**: Konfirmasi tindakan evaluasi permohonan.\n`;
+  }
+  if(task.decisions.length > 0){
+    md += `   - **Tombol Keputusan Gateway**:\n`;
+    task.decisions.forEach(d => {
+      md += `     - \`[${d.name}]\`: Mengirim variabel payload \`${d.condition || 'default'}\`\n`;
+    });
+  }
+  md += `\n`;
+
+  md += `#### C. PostgreSQL DDL Skema\n`;
+  md += `\`\`\`sql\n`;
+  md += `CREATE TABLE IF NOT EXISTS ${task.taskTable} (\n`;
+  md += `    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n`;
+  md += `    business_key UUID NOT NULL REFERENCES ${processInfo.processTable}(id) ON DELETE CASCADE,\n`;
+  task.inputFields.forEach(f => {
+    let colType = 'VARCHAR(255)';
+    if(f.type === 'string' && /catatan|alasan|keterangan/i.test(f.id)) colType = 'TEXT';
+    else if(f.type === 'date') colType = 'DATE';
+    else if(f.type === 'long' || f.type === 'integer') colType = 'BIGINT';
+    else if(f.type === 'boolean') colType = 'BOOLEAN';
+    const notNull = f.mandatory ? ' NOT NULL' : '';
+    md += `    ${_toSnakeCase(f.id)} ${colType}${notNull},\n`;
+  });
+  md += `    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n`;
+  md += `    created_by UUID,\n`;
+  md += `    updated_at TIMESTAMP,\n`;
+  md += `    updated_by UUID,\n`;
+  md += `    deleted_by UUID\n`;
+  md += `);\n`;
+  md += `\`\`\`\n\n`;
+
+  return md;
+}
+
+function _generateFormMatrixMarkdown(matrixData){
+  if(!matrixData || !matrixData.tasks || matrixData.tasks.length === 0) return '';
+  let md = `## Matriks Analisis Form User Task (AlurKerja)\n\n`;
+  md += `*Dokumen spesifikasi 3 halaman (List, Detail, Submit) dan atribut form sesuai standar AlurKerja PT Javan Cipta Solusi.*\n\n`;
+  md += `- **Process Definition Key**: \`${matrixData.processId}\`\n`;
+  md += `- **Tabel Process Instance**: \`${matrixData.processTable}\`\n`;
+  md += `- **Total User Tasks**: ${matrixData.tasks.length} task\n\n`;
+  md += `---\n\n`;
+
+  matrixData.tasks.forEach(t => {
+    md += _generateTaskMatrixMarkdown(t, matrixData);
+  });
+  return md;
+}
+
+async function studioSyncFormMatrixToPrd(matrixMarkdown){
+  if(!_studioCurrentPrdPath){
+    if(typeof showToast === 'function') showToast('Tidak ada file PRD aktif di PRD Studio.', 3500, 'warning');
+    return false;
+  }
+  try {
+    const data = await api(_workspaceRouteForPath(_studioCurrentPrdPath, 'read'));
+    let currentPrd = data.content || '';
+    if(!currentPrd){
+      const viewer = $('studioPrdViewer');
+      currentPrd = viewer ? (viewer.innerText || '') : '';
+    }
+
+    // Non-destructive replacement or insertion
+    const sectionTitleRegex = /(^|\n)(#{2,3}\s+Matriks Analisis Form User Task[^\n]*[\s\S]*?)(?=\n#{2,3}\s+|$)/i;
+    let newPrd = '';
+    if(sectionTitleRegex.test(currentPrd)){
+      newPrd = currentPrd.replace(sectionTitleRegex, '\n\n' + matrixMarkdown.trim() + '\n\n');
+    } else {
+      const appendBeforePattern = /(^|\n)(#{2,3}\s+(?:5\.\s+Non-Functional|Lampiran|Appendix|Catatan)[^\n]*[\s\S]*)/i;
+      if(appendBeforePattern.test(currentPrd)){
+        newPrd = currentPrd.replace(appendBeforePattern, '\n\n' + matrixMarkdown.trim() + '\n\n$1$2');
+      } else {
+        newPrd = currentPrd.trim() + '\n\n' + matrixMarkdown.trim() + '\n';
+      }
+    }
+
+    await api('/api/file/save', {
+      method: 'POST',
+      body: JSON.stringify({
+        session_id: S.session ? S.session.session_id : '',
+        path: _studioCurrentPrdPath,
+        content: newPrd,
+        sync_gdrive: true
+      })
+    });
+
+    const viewer = $('studioPrdViewer');
+    if(viewer && typeof renderMd === 'function'){
+      viewer.innerHTML = renderMd(newPrd);
+      if(typeof _buildStudioPrdOutline === 'function') _buildStudioPrdOutline();
+    }
+
+    if(typeof showToast === 'function'){
+      showToast('✅ Matriks Form berhasil disinkronkan ke PRD & Google Drive! 📋☁️', 3500);
+    }
+    return true;
+  } catch(e) {
+    console.error('Failed to sync Form Matrix to PRD:', e);
+    if(typeof showToast === 'function') showToast('Gagal menyinkronkan ke PRD: ' + e.message, 4000, 'error');
+    return false;
+  }
+}
+
+async function copyAlurkerjaFormMatrixMarkdown(){
+  if(!_activeFormMatrixData){
+    let xml = '';
+    if(_studioBpmnViewerInstance){
+      try {
+        const res = await _studioBpmnViewerInstance.saveXML({ format: true });
+        xml = res.xml;
+      } catch(e){}
+    }
+    if(!xml && _studioCurrentBpmnPath){
+      try {
+        const data = await api(_workspaceRouteForPath(_studioCurrentBpmnPath, 'read'));
+        xml = data.content || '';
+      } catch(e){}
+    }
+    _activeFormMatrixData = _extractAlurkerjaFormMatrix(xml);
+  }
+
+  if(!_activeFormMatrixData){
+    if(typeof showToast === 'function') showToast('Tidak ada data form AlurKerja.', 3000, 'warning');
+    return;
+  }
+
+  const md = _generateFormMatrixMarkdown(_activeFormMatrixData);
+  await navigator.clipboard.writeText(md);
+  if(typeof showToast === 'function') showToast('Matriks Form Markdown berhasil disalin! 📋', 3000);
+}
+
+async function syncAlurkerjaFormMatrixToPrd(){
+  if(!_activeFormMatrixData){
+    let xml = '';
+    if(_studioBpmnViewerInstance){
+      try {
+        const res = await _studioBpmnViewerInstance.saveXML({ format: true });
+        xml = res.xml;
+      } catch(e){}
+    }
+    if(!xml && _studioCurrentBpmnPath){
+      try {
+        const data = await api(_workspaceRouteForPath(_studioCurrentBpmnPath, 'read'));
+        xml = data.content || '';
+      } catch(e){}
+    }
+    _activeFormMatrixData = _extractAlurkerjaFormMatrix(xml);
+  }
+
+  if(!_activeFormMatrixData){
+    if(typeof showToast === 'function') showToast('Tidak ada data form AlurKerja.', 3000, 'warning');
+    return;
+  }
+
+  const md = _generateFormMatrixMarkdown(_activeFormMatrixData);
+  await studioSyncFormMatrixToPrd(md);
+}
+
+function closeAlurkerjaFormMatrixModal(){
+  const modal = $('alurkerjaFormMatrixModal');
+  if(modal) modal.style.display = 'none';
+}
+
+async function openStudioFormMatrixModal(){
+  let xml = '';
+  if(_studioBpmnViewerInstance){
+    try {
+      const res = await _studioBpmnViewerInstance.saveXML({ format: true });
+      xml = res.xml;
+    } catch(e){}
+  }
+  if(!xml && _studioCurrentBpmnPath){
+    try {
+      const data = await api(_workspaceRouteForPath(_studioCurrentBpmnPath, 'read'));
+      xml = data.content || '';
+    } catch(e){}
+  }
+  if(!xml){
+    if(typeof showToast === 'function') showToast('Tidak ada diagram BPMN aktif.', 3000, 'warning');
+    return;
+  }
+
+  _activeFormMatrixData = _extractAlurkerjaFormMatrix(xml);
+  if(!_activeFormMatrixData || _activeFormMatrixData.tasks.length === 0){
+    if(typeof showToast === 'function') showToast('Tidak ditemukan User Task (<bpmn:userTask>) dalam diagram ini.', 3500, 'info');
+    return;
+  }
+
+  const modal = $('alurkerjaFormMatrixModal');
+  const tabsContainer = $('formMatrixTaskTabs');
+  const bodyContainer = $('formMatrixModalBody');
+  if(!modal || !tabsContainer || !bodyContainer) return;
+
+  // Build Tabs
+  let tabsHtml = `<button class="alurkerja-tab-btn active" id="btnFmTab_all" onclick="switchFormMatrixTab('all')">📋 Semua Task (${_activeFormMatrixData.tasks.length})</button>`;
+  _activeFormMatrixData.tasks.forEach((t, i) => {
+    tabsHtml += `<button class="alurkerja-tab-btn" id="btnFmTab_${t.id}" onclick="switchFormMatrixTab('${t.id}')">👤 ${t.name}</button>`;
+  });
+  tabsContainer.innerHTML = tabsHtml;
+
+  // Render Content
+  _renderFormMatrixContent('all');
+
+  modal.style.display = 'flex';
+}
+
+function switchFormMatrixTab(taskId){
+  if(!$('formMatrixTaskTabs')) return;
+  $('formMatrixTaskTabs').querySelectorAll('.alurkerja-tab-btn').forEach(btn => btn.classList.remove('active'));
+  const activeBtn = $('btnFmTab_' + taskId);
+  if(activeBtn) activeBtn.classList.add('active');
+  _renderFormMatrixContent(taskId);
+}
+
+function _renderFormMatrixContent(taskId){
+  const body = $('formMatrixModalBody');
+  if(!body || !_activeFormMatrixData) return;
+
+  const tasksToRender = taskId === 'all'
+    ? _activeFormMatrixData.tasks
+    : _activeFormMatrixData.tasks.filter(t => t.id === taskId);
+
+  let html = '';
+  tasksToRender.forEach(task => {
+    html += `
+      <div style="background:var(--card-bg, #fff);border:1px solid var(--border2);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border2);padding-bottom:10px;">
+          <div>
+            <div style="font-weight:700;font-size:14px;color:var(--text);display:flex;align-items:center;gap:8px;">
+              <span>👤</span> <span>${task.name}</span>
+              <span style="font-size:10px;font-family:var(--font-mono);background:rgba(0,0,0,0.06);padding:2px 6px;border-radius:4px;color:var(--muted);">${task.id}</span>
+            </div>
+            <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">
+              Aktor / Lane: <strong style="color:var(--text);">${task.lane}</strong> &bull; Tabel: <code style="font-size:11px;">${task.taskTable}</code>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="studio-btn" style="padding:3px 8px;font-size:11px;" onclick="copySingleTaskMatrixMarkdown('${task.id}')">📋 Salin Task MD</button>
+            <button class="studio-btn studio-btn-primary" style="padding:3px 8px;font-size:11px;" onclick="syncSingleTaskMatrixToPrd('${task.id}')">📥 Tambah ke PRD</button>
+          </div>
+        </div>
+
+        <!-- 3 Views Grid -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:12px;">
+          <!-- 1. List View -->
+          <div class="studio-view-card" style="border-top:3px solid #3b82f6;">
+            <div class="studio-view-title"><span style="color:#3b82f6;">📑</span> 1. Halaman List / Antrean</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Daftar pengajuan masuk pada status ${task.name}.</div>
+            <div style="background:var(--surface);border:1px solid var(--border2);border-radius:5px;padding:6px;font-size:10.5px;">
+              <div style="font-weight:600;margin-bottom:4px;color:var(--text);">Kolom Antrean:</div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                ${task.listColumns.map(c => `<span style="background:rgba(59,130,246,0.12);color:#2563eb;padding:1px 6px;border-radius:3px;font-size:10px;">${c}</span>`).join('')}
+              </div>
+              <div style="margin-top:6px;font-size:10px;color:var(--muted);display:flex;gap:6px;">
+                <span>🔘 <code>[Lihat Detail]</code></span>
+                <span>🔘 <code>[Kerjakan]</code></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Detail View -->
+          <div class="studio-view-card" style="border-top:3px solid #10b981;">
+            <div class="studio-view-title"><span style="color:#10b981;">🔍</span> 2. Halaman Detail (Read-Only)</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Ringkasan identitas pemohon &amp; berkas pengajuan.</div>
+            <div style="background:var(--surface);border:1px solid var(--border2);border-radius:5px;padding:6px;font-size:10.5px;max-height:100px;overflow-y:auto;">
+              ${task.viewOnlyFields.length > 0 ? task.viewOnlyFields.map(f => `
+                <div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed var(--border2);">
+                  <span style="color:var(--muted);">${f.label}:</span>
+                  <span style="font-weight:500;">(Read-Only)</span>
+                </div>
+              `).join('') : '<div style="color:var(--muted);font-style:italic;">Data pengajuan awal ditampilkan secara read-only.</div>'}
+            </div>
+          </div>
+
+          <!-- 3. Submit View -->
+          <div class="studio-view-card" style="border-top:3px solid #8b5cf6;">
+            <div class="studio-view-title"><span style="color:#8b5cf6;">✍️</span> 3. Halaman Submit Task</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Isian formulir &amp; aksi keputusan aktor.</div>
+            <div style="background:var(--surface);border:1px solid var(--border2);border-radius:5px;padding:6px;font-size:10.5px;">
+              <div style="font-weight:600;margin-bottom:4px;color:var(--text);">Input Formulir:</div>
+              <div style="display:flex;flex-direction:column;gap:3px;margin-bottom:8px;">
+                ${task.inputFields.length > 0 ? task.inputFields.map(f => `
+                  <div style="display:flex;align-items:center;gap:4px;">
+                    <span style="color:var(--text);">${f.label}</span>
+                    ${f.mandatory ? '<span style="color:#ef4444;font-weight:bold;">*</span>' : ''}
+                    <span style="color:var(--muted);font-size:9.5px;">(${f.type})</span>
+                  </div>
+                `).join('') : '<div style="color:var(--muted);font-style:italic;">Verifikasi dan persetujuan.</div>'}
+              </div>
+              <div style="font-weight:600;margin-bottom:4px;color:var(--text);">Tombol Keputusan:</div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                ${task.decisions.length > 0 ? task.decisions.map(d => `
+                  <span style="background:rgba(139,92,246,0.15);color:#7c3aed;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;" title="${d.condition}">
+                    🔘 ${d.name} <code style="opacity:0.8;font-size:9px;">${d.condition}</code>
+                  </span>
+                `).join('') : '<span style="color:var(--muted);font-style:italic;">Default sequential flow</span>'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Form Attributes Table -->
+        ${task.fields.length > 0 ? `
+          <div style="margin-top:4px;">
+            <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:6px;">📋 Matriks Atribut Lengkap (${task.fields.length} Field):</div>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;border:1px solid var(--border2);border-radius:6px;overflow:hidden;">
+              <thead>
+                <tr style="background:var(--surface);border-bottom:1px solid var(--border2);text-align:left;">
+                  <th style="padding:6px 10px;">ID Field</th>
+                  <th style="padding:6px 10px;">Label</th>
+                  <th style="padding:6px 10px;">Tipe</th>
+                  <th style="padding:6px 10px;">View Only?</th>
+                  <th style="padding:6px 10px;">Mandatory?</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${task.fields.map(f => `
+                  <tr style="border-bottom:1px solid var(--border2);">
+                    <td style="padding:5px 10px;font-family:var(--font-mono);font-size:10.5px;">${f.id}</td>
+                    <td style="padding:5px 10px;">${f.label}</td>
+                    <td style="padding:5px 10px;color:var(--muted);">${f.type}</td>
+                    <td style="padding:5px 10px;">${f.viewOnly ? '<span style="color:#0284c7;font-weight:600;">Ya</span>' : 'Tidak'}</td>
+                    <td style="padding:5px 10px;">${f.mandatory ? '<span style="color:#ef4444;font-weight:600;">Ya *</span>' : 'Tidak'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  });
+
+  body.innerHTML = html;
+}
+
+async function copySingleTaskMatrixMarkdown(taskId){
+  let matrix = _activeFormMatrixData;
+  if(!matrix && _currentInspectorTaskData && _currentInspectorTaskData.id === taskId){
+    matrix = {
+      processId: 'Process',
+      processName: 'Process',
+      processTable: 'process',
+      tasks: [_currentInspectorTaskData]
+    };
+  }
+  if(!matrix) return;
+  const task = matrix.tasks.find(t => t.id === taskId);
+  if(!task) return;
+  const md = _generateTaskMatrixMarkdown(task, matrix);
+  await navigator.clipboard.writeText(md);
+  if(typeof showToast === 'function') showToast(`Matriks ${task.name} disalin ke clipboard! 📋`, 3000);
+}
+
+async function syncSingleTaskMatrixToPrd(taskId){
+  let matrix = _activeFormMatrixData;
+  if(!matrix && _currentInspectorTaskData && _currentInspectorTaskData.id === taskId){
+    matrix = {
+      processId: 'Process',
+      processName: 'Process',
+      processTable: 'process',
+      tasks: [_currentInspectorTaskData]
+    };
+  }
+  if(!matrix) return;
+  const task = matrix.tasks.find(t => t.id === taskId);
+  if(!task) return;
+  const md = _generateTaskMatrixMarkdown(task, matrix);
+  await studioSyncFormMatrixToPrd(md);
+}
+
+function _switchInspectorTab(tabId){
+  const tabs = document.querySelectorAll('.studio-inspector-tab-btn');
+  tabs.forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-tab') === tabId));
+
+  const contentViews = $('inspectorTabContentViews');
+  const contentTags = $('inspectorTabContentTags');
+  const contentDdl = $('inspectorTabContentDdl');
+
+  if(contentViews) contentViews.style.display = tabId === 'views' ? 'flex' : 'none';
+  if(contentTags) contentTags.style.display = tabId === 'tags' ? 'flex' : 'none';
+  if(contentDdl) contentDdl.style.display = tabId === 'ddl' ? 'flex' : 'none';
+}
+
 function inspectStudioBpmnElement(el){
   const inspector = $('studioBpmnInspector');
   if(!inspector || !el || !el.businessObject) return;
@@ -3715,6 +4254,7 @@ function inspectStudioBpmnElement(el){
     tableName = `${_toSnakeCase(processId)}_${_toSnakeCase(id)}`;
   }
 
+  // Header
   let html = `
     <div class="studio-bpmn-inspector-head">
       <div style="display:flex;align-items:center;gap:8px;min-width:0;">
@@ -3729,33 +4269,119 @@ function inspectStudioBpmnElement(el){
     </div>
   `;
 
-  if(formFields.length > 0){
-    html += `
-      <div style="display:flex;flex-direction:column;gap:4px;">
-        <div style="font-size:10.5px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">📋 Form Attributes (${formFields.length} fields):</div>
-        <div class="studio-bpmn-inspector-tags">
-    `;
-    formFields.forEach(f => {
-      let tagClass = 'studio-bpmn-tag';
-      if(f.viewOnly) tagClass += ' view-only';
-      if(f.mandatory) tagClass += ' mandatory';
-      html += `<span class="${tagClass}" title="${f.label} (${f.type}) • Click to copy ID" onclick="navigator.clipboard.writeText('${f.id}');if(typeof showToast==='function')showToast('Copied ${f.id}')" style="cursor:pointer;">${f.id} <span style="opacity:0.6;font-size:9.5px;">:${f.type}</span></span>`;
-    });
-    html += `</div></div>`;
-  } else if(isTask){
-    html += `<div style="font-size:11px;color:#94a3b8;font-style:italic;">Belum ada form fields (&lt;camunda:formField&gt;) pada task ini.</div>`;
-  }
+  if(isTask && type.includes('UserTask')){
+    const viewOnlyFields = formFields.filter(f => f.viewOnly);
+    const inputFields = formFields.filter(f => !f.viewOnly);
+    const listCols = ['No', 'ID Tiket', ...viewOnlyFields.map(f => f.label || f.id), 'Status', 'Aksi'];
 
-  if(decisions.length > 0){
+    const taskObj = {
+      id,
+      name,
+      lane: 'Actor',
+      taskTable: tableName,
+      fields: formFields,
+      viewOnlyFields,
+      inputFields,
+      decisions,
+      listColumns: listCols
+    };
+    _currentInspectorTaskData = taskObj;
+
     html += `
-      <div style="display:flex;flex-direction:column;gap:4px;margin-top:2px;">
-        <div style="font-size:10.5px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">🔀 Actions &amp; Conditions (${decisions.length}):</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:2px;">
+        <div class="studio-inspector-tabs">
+          <button class="studio-inspector-tab-btn active" data-tab="views" onclick="_switchInspectorTab('views')">📑 3 Tampilan AlurKerja</button>
+          <button class="studio-inspector-tab-btn" data-tab="tags" onclick="_switchInspectorTab('tags')">📋 Form Attributes (${formFields.length})</button>
+          <button class="studio-inspector-tab-btn" data-tab="ddl" onclick="_switchInspectorTab('ddl')">🗄️ DDL SQL</button>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="studio-btn" style="padding:2px 8px;font-size:10.5px;border-radius:4px;" onclick="copySingleTaskMatrixMarkdown('${id}')">📋 Salin MD</button>
+          <button class="studio-btn studio-btn-primary" style="padding:2px 8px;font-size:10.5px;border-radius:4px;" onclick="syncSingleTaskMatrixToPrd('${id}')">📥 Sisipkan ke PRD</button>
+        </div>
+      </div>
+
+      <!-- Tab Content: 3 Views -->
+      <div id="inspectorTabContentViews" style="display:flex;flex-direction:column;gap:6px;margin-top:2px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:8px;">
+          <!-- 1. List View -->
+          <div class="studio-view-card" style="border-left:3px solid #3b82f6;">
+            <div class="studio-view-title"><span style="color:#3b82f6;">📑</span> 1. Halaman List / Antrean</div>
+            <div style="font-size:10.5px;color:#94a3b8;">Kolom Antrean:</div>
+            <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px;">
+              ${listCols.map(c => `<span style="background:rgba(59,130,246,0.15);color:#93c5fd;padding:1px 5px;border-radius:3px;font-size:9.5px;">${c}</span>`).join('')}
+            </div>
+            <div style="margin-top:4px;font-size:9.5px;color:#94a3b8;">Aksi: <code>[Detail]</code> <code>[Kerjakan]</code></div>
+          </div>
+
+          <!-- 2. Detail View -->
+          <div class="studio-view-card" style="border-left:3px solid #10b981;">
+            <div class="studio-view-title"><span style="color:#10b981;">🔍</span> 2. Halaman Detail (Read-Only)</div>
+            <div style="font-size:10.5px;color:#94a3b8;">Field Pengajuan Pemohon:</div>
+            <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px;max-height:48px;overflow-y:auto;">
+              ${viewOnlyFields.length > 0 ? viewOnlyFields.map(f => `<span style="background:rgba(16,185,129,0.15);color:#6ee7b7;padding:1px 5px;border-radius:3px;font-size:9.5px;">${f.label}</span>`).join('') : '<span style="color:#64748b;font-size:9.5px;font-style:italic;">Read-only summary</span>'}
+            </div>
+          </div>
+
+          <!-- 3. Submit View -->
+          <div class="studio-view-card" style="border-left:3px solid #8b5cf6;">
+            <div class="studio-view-title"><span style="color:#8b5cf6;">✍️</span> 3. Halaman Submit Task</div>
+            <div style="font-size:10.5px;color:#94a3b8;">Input: ${inputFields.length > 0 ? inputFields.map(f => `${f.label}${f.mandatory?'*':''}`).join(', ') : 'Persetujuan'}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;">
+              ${decisions.length > 0 ? decisions.map(d => `<span style="background:rgba(139,92,246,0.2);color:#c4b5fd;padding:1px 5px;border-radius:3px;font-size:9.5px;" title="${d.condition}">🔘 ${d.name}</span>`).join('') : '<span style="color:#64748b;font-size:9.5px;font-style:italic;">Default flow</span>'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content: Tags -->
+      <div id="inspectorTabContentTags" style="display:none;flex-direction:column;gap:6px;margin-top:2px;">
         <div class="studio-bpmn-inspector-tags">
+          ${formFields.map(f => {
+            let tc = 'studio-bpmn-tag';
+            if(f.viewOnly) tc += ' view-only';
+            if(f.mandatory) tc += ' mandatory';
+            return `<span class="${tc}" title="${f.label} (${f.type}) • Click to copy ID" onclick="navigator.clipboard.writeText('${f.id}');if(typeof showToast==='function')showToast('Copied ${f.id}')" style="cursor:pointer;">${f.id} <span style="opacity:0.6;font-size:9.5px;">:${f.type}</span></span>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- Tab Content: DDL -->
+      <div id="inspectorTabContentDdl" style="display:none;flex-direction:column;gap:4px;margin-top:2px;">
+        <pre style="background:rgba(0,0,0,0.4);color:#93c5fd;padding:8px;border-radius:6px;font-family:var(--font-mono);font-size:10.5px;margin:0;max-height:90px;overflow-y:auto;">CREATE TABLE IF NOT EXISTS ${tableName} (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_key UUID NOT NULL,
+    ${inputFields.map(f => `${_toSnakeCase(f.id)} VARCHAR(255)`).join(',\n    ')}
+);</pre>
+      </div>
     `;
-    decisions.forEach(d => {
-      html += `<span class="studio-bpmn-tag decision" title="${d.condition || 'Default flow'}"><strong>${d.name}</strong> ${d.condition ? `<code style="font-size:10px;opacity:0.9;">${d.condition}</code>` : ''}</span>`;
-    });
-    html += `</div></div>`;
+  } else {
+    // Non-UserTask Element
+    if(formFields.length > 0){
+      html += `
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <div style="font-size:10.5px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">📋 Form Attributes (${formFields.length} fields):</div>
+          <div class="studio-bpmn-inspector-tags">
+      `;
+      formFields.forEach(f => {
+        let tagClass = 'studio-bpmn-tag';
+        if(f.viewOnly) tagClass += ' view-only';
+        if(f.mandatory) tagClass += ' mandatory';
+        html += `<span class="${tagClass}" title="${f.label} (${f.type}) • Click to copy ID" onclick="navigator.clipboard.writeText('${f.id}');if(typeof showToast==='function')showToast('Copied ${f.id}')" style="cursor:pointer;">${f.id} <span style="opacity:0.6;font-size:9.5px;">:${f.type}</span></span>`;
+      });
+      html += `</div></div>`;
+    }
+
+    if(decisions.length > 0){
+      html += `
+        <div style="display:flex;flex-direction:column;gap:4px;margin-top:2px;">
+          <div style="font-size:10.5px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">🔀 Actions &amp; Conditions (${decisions.length}):</div>
+          <div class="studio-bpmn-inspector-tags">
+      `;
+      decisions.forEach(d => {
+        html += `<span class="studio-bpmn-tag decision" title="${d.condition || 'Default flow'}"><strong>${d.name}</strong> ${d.condition ? `<code style="font-size:10px;opacity:0.9;">${d.condition}</code>` : ''}</span>`;
+      });
+      html += `</div></div>`;
+    }
   }
 
   inspector.innerHTML = html;
@@ -3994,6 +4620,14 @@ window.openStudioActiveCollabModal = openStudioActiveCollabModal;
 window.closeActiveCollabModal = closeActiveCollabModal;
 window.copyActiveCollabTasks = copyActiveCollabTasks;
 window.exportActiveCollabCsv = exportActiveCollabCsv;
+window.openStudioFormMatrixModal = openStudioFormMatrixModal;
+window.closeAlurkerjaFormMatrixModal = closeAlurkerjaFormMatrixModal;
+window.copyAlurkerjaFormMatrixMarkdown = copyAlurkerjaFormMatrixMarkdown;
+window.syncAlurkerjaFormMatrixToPrd = syncAlurkerjaFormMatrixToPrd;
+window.switchFormMatrixTab = switchFormMatrixTab;
+window._switchInspectorTab = _switchInspectorTab;
+window.copySingleTaskMatrixMarkdown = copySingleTaskMatrixMarkdown;
+window.syncSingleTaskMatrixToPrd = syncSingleTaskMatrixToPrd;
 
 
 

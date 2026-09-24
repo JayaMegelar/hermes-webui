@@ -2284,6 +2284,64 @@ const COUNCIL_ROLES = [
   }
 ];
 
+const STELLAR_COUNCIL_ROLES = [
+  {
+    name: 'polaris',
+    tag: '@polaris',
+    gem: 'Polaris',
+    role: 'Fit-Gap & Standard-First Lead',
+    color: '#38bdf8',
+    bg: 'rgba(56, 189, 248, 0.12)',
+    desc: 'Standard-first hierarchy, tolak kustomisasi redundan & fitur kosmetik',
+    aliases: ['fitgap', 'standard', 'odoo'],
+    iconSvg: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 9 22 12 15 15 12 22 9 15 2 12 9 9 12 2"/><circle cx="12" cy="12" r="2.5"/></svg>`
+  },
+  {
+    name: 'vega',
+    tag: '@vega',
+    gem: 'Vega',
+    role: 'Functional BA & Operational Impact',
+    color: '#10b981',
+    bg: 'rgba(16, 185, 129, 0.12)',
+    desc: 'Membedah As-Is vs To-Be, SOP cabang & audit beban kerja user nyata',
+    aliases: ['ba', 'impact', 'functional', 'proses'],
+    iconSvg: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="12" r="3"/><line x1="8.5" y1="7.5" x2="15.5" y2="10.5"/><line x1="8.5" y1="16.5" x2="15.5" y2="13.5"/><line x1="6" y1="9" x2="6" y2="15"/></svg>`
+  },
+  {
+    name: 'arcturus',
+    tag: '@arcturus',
+    gem: 'Arcturus',
+    role: 'Core ORM & Clean Code Lead',
+    color: '#f59e0b',
+    bg: 'rgba(245, 158, 11, 0.12)',
+    desc: 'Clean code, reusable Mixin/DRY, efisiensi query ORM & anti-N+1',
+    aliases: ['orm', 'clean', 'tech', 'code'],
+    iconSvg: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><rect x="9" y="9" width="6" height="6" rx="1"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/></svg>`
+  },
+  {
+    name: 'sirius',
+    tag: '@sirius',
+    gem: 'Sirius',
+    role: 'Security & Multi-Tenant Auditor',
+    color: '#818cf8',
+    bg: 'rgba(129, 140, 248, 0.12)',
+    desc: 'Audit hak akses ir.model.access, ir.rule & isolasi multi-cabang',
+    aliases: ['security', 'access', 'rule', 'branch'],
+    iconSvg: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5.5-3.8 10.7-8 12-4.2-1.3-8-6.5-8-12V6l8-4z"/><circle cx="12" cy="11" r="3"/><line x1="12" y1="8" x2="12" y2="14"/><line x1="9" y1="11" x2="15" y2="11"/></svg>`
+  },
+  {
+    name: 'rigel',
+    tag: '@rigel',
+    gem: 'Rigel',
+    role: 'Ops & DB Migration Auditor',
+    color: '#ec4899',
+    bg: 'rgba(236, 72, 153, 0.12)',
+    desc: 'Uji kelayakan upgrade (-u module), skema DDL & Docker/ECS readiness',
+    aliases: ['ops', 'migration', 'deploy', 'db'],
+    iconSvg: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><polyline points="12 11 12 17 15 14"/></svg>`
+  }
+];
+
 function getCouncilMentionMatches(text, cursor){
   if(cursor === undefined || cursor === null) cursor = (text || '').length;
   const beforeCursor = (text || '').slice(0, cursor);
@@ -2294,7 +2352,12 @@ function getCouncilMentionMatches(text, cursor){
   const tokenStart = cursor - match[2].length - 1;
   const tokenEnd = cursor;
 
-  const filtered = COUNCIL_ROLES.filter(r => {
+  const isOdooProfile = (typeof S !== 'undefined' && S && S.activeProfile === 'odoo');
+  const primaryRoles = isOdooProfile ? STELLAR_COUNCIL_ROLES : COUNCIL_ROLES;
+  const secondaryRoles = isOdooProfile ? COUNCIL_ROLES : STELLAR_COUNCIL_ROLES;
+  const pool = query ? [...primaryRoles, ...secondaryRoles] : primaryRoles;
+
+  const filtered = pool.filter(r => {
     if(!query) return true;
     return r.name.toLowerCase().includes(query) ||
            r.gem.toLowerCase().includes(query) ||
@@ -2302,7 +2365,16 @@ function getCouncilMentionMatches(text, cursor){
            r.aliases.some(a => a.toLowerCase().includes(query));
   });
 
-  return filtered.map(r => ({
+  const seen = new Set();
+  const uniqueFiltered = [];
+  for(const r of filtered){
+    if(!seen.has(r.tag)){
+      seen.add(r.tag);
+      uniqueFiltered.push(r);
+    }
+  }
+
+  return uniqueFiltered.map(r => ({
     source: 'council',
     tag: r.tag,
     gem: r.gem,
@@ -2316,6 +2388,7 @@ function getCouncilMentionMatches(text, cursor){
   }));
 }
 window.COUNCIL_ROLES = COUNCIL_ROLES;
+window.STELLAR_COUNCIL_ROLES = STELLAR_COUNCIL_ROLES;
 window.getCouncilMentionMatches = getCouncilMentionMatches;
 
 let _cmdSelectedIdx=-1;
